@@ -71,6 +71,17 @@ function analyse(pack) {
     music: out.music ? 1 : 0,
   };
 
+  // Roll balance: how much runtime each source actually gets on screen. A
+  // screen-share video that never shows the screen reads as "face 95%" here —
+  // the exact fault a green scorecard once missed.
+  const rollTime = {};
+  for (const s of segs) rollTime[s.source] = (rollTime[s.source] || 0) + dur(s);
+  const rollBalance = Object.entries(rollTime)
+    .map(([source, t]) => ({ source, pct: total ? t / total : 0 }))
+    .sort((a, b) => b.pct - a.pct);
+  const multiRoll = rollBalance.length > 1;
+  const topRoll = rollBalance[0] || { source: "-", pct: 0 };
+
   const draggers = segs.map((s, i) => ({ i, d: dur(s) })).filter((x) => x.d > DRAGGER);
   const churn = segs.map((s, i) => ({ i, d: dur(s) })).filter((x) => x.d < CHURN);
   const sorted = [...durations].sort((a, b) => a - b);
@@ -86,7 +97,8 @@ function analyse(pack) {
     .filter((k) => moves[k] > 0).length;
 
   return { total, count: segs.length, durations, median, thTime, thPct: total ? thTime / total : 0,
-    longestStatic, moves, moveKinds, draggers, churn, audioWarm, audioBad, audioFilter: af };
+    longestStatic, moves, moveKinds, draggers, churn, audioWarm, audioBad, audioFilter: af,
+    rollBalance, multiRoll, topRoll };
 }
 
 function fmt(n, d = 1) { return Number(n).toFixed(d); }
@@ -113,6 +125,13 @@ function scorecard(pack, m, validation) {
     `roll×${mv.rollSwitch} pip×${mv.pip} zoom×${mv.zoom} img×${mv.image} cap(ed${mv.capEditor}/lab${mv.capLabel}/pl${mv.capPlain})` +
     (mv.speed ? ` speed×${mv.speed}` : "") + (mv.transition ? ` trans×${mv.transition}` : "") + (mv.music ? " music" : ""));
   if (vFlags.length) L.push(`             ⚠ ${vFlags.join(" · ")}`);
+
+  // ROLLS — what's actually on screen, and for how long
+  const balStr = m.rollBalance.map((r) => `${r.source} ${Math.round(r.pct * 100)}%`).join("  ");
+  L.push(`ROLLS        ${balStr}`);
+  if (m.multiRoll && m.topRoll.pct > 0.85) {
+    L.push(`             ⚠ '${m.topRoll.source}' dominates (${Math.round(m.topRoll.pct * 100)}%) — the other roll(s) are barely shown. On a screen-share video, show the screen.`);
+  }
 
   // CORRECTNESS
   const cFlags = [];
@@ -192,7 +211,7 @@ if (contactIdx !== -1) {
 if (wantJson) {
   console.log(JSON.stringify({ runtime: m.total, segments: m.count, medianSeg: m.median,
     talkingHeadPct: m.thPct, longestStaticSec: m.longestStatic, moves: m.moves, moveKinds: m.moveKinds,
-    draggers: m.draggers, churn: m.churn, audioWarm: m.audioWarm, audioBad: m.audioBad,
+    rollBalance: m.rollBalance, draggers: m.draggers, churn: m.churn, audioWarm: m.audioWarm, audioBad: m.audioBad,
     validationErrors: validation.errors, sheet }, null, 2));
 } else {
   console.log(scorecard(pack, m, validation));
