@@ -101,6 +101,25 @@ node skills/edator/scripts/render.js mypack.json --out final.mp4
 
 Source paths in a pack resolve relative to the pack file (or pass absolute).
 
+### Validate a pack
+
+The pack is the contract, so it's checked before anything renders — `render.js`
+refuses to run an invalid pack, and you can run the check standalone:
+
+```bash
+node skills/edator/scripts/validate.js mypack.json
+```
+
+Two layers: **semantic** checks always run with zero dependencies (dangling source
+references, captions outside their segment, an image segment with no audio, a
+multi-roll timeline with no canvas size — each error names the segment and field).
+**Structural** checks (typo'd fields, wrong types, bad enums via the shipped JSON
+schema) turn on once you install [ajv](https://ajv.js.org/):
+
+```bash
+cd skills/edator/scripts && npm install   # optional: enables strict schema checks + npm test
+```
+
 ## Recording: one session, two rolls
 
 The nicest workflow is two files — screen and camera — captured in **one** session

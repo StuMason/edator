@@ -37,6 +37,7 @@ import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync } from 
 import { dirname, resolve, isAbsolute, join } from "node:path";
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
+import { validatePack } from "./validate.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const die = (m) => { console.error(`✗ ${m}`); process.exit(1); };
@@ -346,7 +347,7 @@ function ffmpegArgs(plan, graph, outPath) {
   return args;
 }
 
-function main() {
+async function main() {
   const argv = process.argv.slice(2);
   if (argv.length === 0 || argv.includes("-h") || argv.includes("--help")) {
     console.log("Usage: node render.js <edit-pack.json> [--out <file.mp4>] [--dry-run]");
@@ -358,6 +359,11 @@ function main() {
   const outOverride = outFlagIdx !== -1 ? argv[outFlagIdx + 1] : null;
 
   const pack = loadPack(packPath);
+
+  // Refuse to render an invalid pack — fail fast with located errors.
+  const { errors } = await validatePack(pack);
+  if (errors.length) die(`Edit pack failed validation:\n  • ${errors.join("\n  • ")}`);
+
   const plan = planInputs(pack, dirname(packPath));
   const graph = buildGraph(pack, plan);
 
@@ -383,3 +389,4 @@ function main() {
 }
 
 main();
+
