@@ -120,6 +120,25 @@ schema) turn on once you install [ajv](https://ajv.js.org/):
 cd skills/edator/scripts && npm install   # optional: enables strict schema checks + npm test
 ```
 
+### Score a pack (the feedback signal)
+
+`record → pack → render` has no closing signal — so the editor is cutting blind.
+`report.js` is that signal: a scorecard across four dimensions, plus an optional
+contact sheet so you can *see* what the pack did without watching anything.
+
+```bash
+node skills/edator/scripts/report.js mypack.json                      # scorecard (fast, pack only)
+node skills/edator/scripts/report.js mypack.json --json               # machine-readable
+node skills/edator/scripts/report.js mypack.json --contact out.mp4    # + a labelled contact sheet PNG
+```
+
+- **Tightness** — runtime, median segment, draggers (>12s), churn (<0.5s)
+- **Variety** — % talking-head, move histogram, longest static stretch
+- **Correctness** — validation, warm-audio compliance, captions in-bounds
+- **Ceiling** — inventory of the ambitious moves attempted (eyeball the sheet to see if they landed)
+
+It's how "did this edit get better?" becomes a number instead of a vibe.
+
 ## Recording: one session, two rolls
 
 The nicest workflow is two files — screen and camera — captured in **one** session

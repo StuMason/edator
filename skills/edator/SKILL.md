@@ -50,6 +50,12 @@ write a pack — every field there is executed; nothing is reserved.
    rendering. Then `node scripts/render.js <pack.json>` (which validates again and
    refuses an invalid pack; `--dry-run` prints the ffmpeg plan, `--out` overrides the
    name). Output lands in `./out`.
+8. **Score it — close the loop.** `node scripts/report.js <pack.json> --contact out/<file>.mp4`
+   prints a scorecard (tightness / variety / correctness / ceiling) and builds a
+   labelled contact sheet. READ IT BACK: if talking-head is high, a stretch is too
+   static, or a dragger is flagged, fix the pack and re-render. This is how the edit
+   improves instead of shipping blind — don't skip it, and don't reach for ad-hoc
+   ffmpeg to "fix it in post" before checking the cut is already fine.
 
 ## Two-roll recording (optional but great)
 
