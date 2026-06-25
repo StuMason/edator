@@ -43,8 +43,13 @@ write a pack — every field there is executed; nothing is reserved.
    as on-brand HTML → screenshot → PNG (stills) or short MP4. See `references/style.md`.
 6. **Write the pack.** Build `timeline` against the schema. Decorate the cut spine
    with roll-switches, PiP, zoom punch-ins, B-roll, captions, EdAtor beats.
-7. **Render.** `node scripts/render.js <pack.json>` (`--dry-run` prints the ffmpeg
-   plan; `--out <file>` overrides the name). Output lands in `./out`.
+7. **Validate, then render.** `node scripts/validate.js <pack.json>` checks the pack
+   against the contract (dangling source refs, captions outside their segment, image
+   segments with no audio, multi-roll with no canvas, and — with ajv installed —
+   typo'd fields). This is your first feedback signal: fix what it reports before
+   rendering. Then `node scripts/render.js <pack.json>` (which validates again and
+   refuses an invalid pack; `--dry-run` prints the ffmpeg plan, `--out` overrides the
+   name). Output lands in `./out`.
 
 ## Two-roll recording (optional but great)
 
