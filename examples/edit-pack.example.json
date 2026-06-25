@@ -1,0 +1,37 @@
+{
+  "version": "1.1",
+  "meta": {
+    "title": "Example edit pack — a two-roll dev demo",
+    "purpose": "A worked template showing every renderer feature. Point the sources at your own footage and run: node ../skills/edator/scripts/render.js edit-pack.example.json",
+    "generatedBy": "hand-written example",
+    "notes": "Audio bed = the screen roll (the mic). The same start/end addresses the same instant in either roll because they were recorded on one clock."
+  },
+  "sources": {
+    "cam":     { "file": "recordings/camera.mp4", "fps": 30 },
+    "screen":  { "file": "recordings/screen.mp4", "fps": 30 },
+    "diagram": { "file": "assets/architecture.png", "image": true }
+  },
+  "audio": "screen",
+  "output": {
+    "filename": "demo.mp4",
+    "width": 1280,
+    "height": 720,
+    "fps": 30,
+    "audioFilter": "volume=7dB,alimiter=limit=0.95"
+  },
+  "timeline": [
+    { "source": "cam", "start": 3.5, "end": 18.0, "reason": "Intro, trimmed the throat-clear off the top.",
+      "captions": [ { "text": "what we built", "style": "label", "start": 5.0, "end": 9.0 } ] },
+
+    { "source": "cam", "start": 24.0, "end": 33.0, "zoom": 1.14, "reason": "Cut a fumbled retake (18-24); punch in on the key claim." },
+
+    { "source": "diagram", "start": 33.0, "end": 44.0, "reason": "Hold the architecture diagram while he explains it; keep him in the corner.",
+      "pip": { "source": "cam", "corner": "br", "width": 0.26, "margin": 0.02 },
+      "captions": [
+        { "text": "read-only API", "style": "label", "start": 35.0, "end": 39.0 },
+        { "text": "he wrote this at 2am. it shows.", "style": "editor", "start": 40.0, "end": 43.0 }
+      ] },
+
+    { "source": "cam", "start": 44.0, "end": 58.0, "reason": "Back to face for the wrap." }
+  ]
+}

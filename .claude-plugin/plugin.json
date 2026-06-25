@@ -1,0 +1,12 @@
+{
+  "name": "edator",
+  "description": "Record once. Claude makes the edit decisions, FFmpeg executes them. An AI co-producer that cuts your raw footage into a finished video — deterministically.",
+  "version": "0.0.1",
+  "author": {
+    "name": "Stu Mason",
+    "email": "stu@stuartmason.co.uk"
+  },
+  "homepage": "https://github.com/StuMason/edator",
+  "repository": "https://github.com/StuMason/edator",
+  "keywords": ["video", "editing", "ffmpeg", "ai", "co-producer", "skill", "edit-decision-list"]
+}

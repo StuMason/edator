@@ -1,0 +1,30 @@
+# dependencies
+node_modules/
+
+# secrets — never commit
+.env
+.env.*
+*.pem
+
+# your footage and renders stay local — this is a tool, not a media dump
+recordings/
+out/
+scratch/
+analysis/
+*.mp4
+*.mov
+*.mkv
+*.webm
+*.mp3
+*.wav
+*.m4a
+
+# transcripts / generated analysis
+*.transcript.json
+
+# os / editor cruft
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

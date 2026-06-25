@@ -1,0 +1,147 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "$id": "https://stumason.dev/edator/edit-pack.schema.json",
+  "title": "Edator Edit Pack",
+  "description": "Deterministic edit-decision list. Claude produces this; renderer/render.js executes it with FFmpeg and makes NO further decisions. Anything the renderer needs must be explicit here. This schema documents what the renderer ACTUALLY does — every field below is executed, none are reserved.",
+  "type": "object",
+  "required": ["version", "sources", "timeline"],
+  "additionalProperties": false,
+  "properties": {
+    "version": {
+      "type": "string",
+      "description": "Edit-pack version. \"1.1\" is current; \"1.0\" is an accepted legacy alias (same behaviour).",
+      "enum": ["1.0", "1.1"]
+    },
+    "meta": {
+      "type": "object",
+      "description": "Free-form provenance. Ignored by the renderer; useful for humans and for explaining editorial intent.",
+      "additionalProperties": true,
+      "properties": {
+        "title": { "type": "string" },
+        "purpose": { "type": "string" },
+        "generatedBy": { "type": "string" },
+        "generatedAt": { "type": "string" },
+        "notes": { "type": "string" }
+      }
+    },
+    "sources": {
+      "type": "object",
+      "description": "Named input media. Keys are referenced by timeline segments, pip and the audio bed. Two-roll recordings (e.g. 'cam' + 'screen') share one clock, so the same start/end addresses the same moment in either roll — that's what makes roll-switching and PiP lip-sync for free.",
+      "minProperties": 1,
+      "additionalProperties": {
+        "type": "object",
+        "required": ["file"],
+        "additionalProperties": false,
+        "properties": {
+          "file": { "type": "string", "description": "Path relative to the edit pack, or absolute." },
+          "fps": { "type": "number", "description": "Informational only." },
+          "duration": { "type": "number", "description": "Informational only, seconds." },
+          "image": {
+            "type": "boolean",
+            "description": "If true, this source is a still image (B-roll card/diagram). A segment using it is held on-screen for [start,end); the image has no audio, so the segment MUST get sound from the global `audio` bed or its own `audio` override."
+          }
+        }
+      }
+    },
+    "audio": {
+      "type": "string",
+      "description": "Optional global audio bed: a source key whose audio plays continuously while the video roll switches above it. Each segment reads this source's audio at the segment's own [start,end]. Use it when rolls share a clock (e.g. bed on 'screen' = the mic) so narration is unbroken across cuts to image B-roll or the other roll. A segment's own `audio` overrides this."
+    },
+    "output": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "filename": { "type": "string", "default": "edit.mp4", "description": "Lands in out/ unless absolute. Overridable with --out." },
+        "width": { "type": "integer", "description": "Canvas width. REQUIRED once the timeline switches rolls or uses pip (frames must share a size)." },
+        "height": { "type": "integer", "description": "Canvas height. REQUIRED once the timeline switches rolls or uses pip." },
+        "fps": { "type": "integer", "description": "Output frame rate. Also the framerate held image B-roll renders at." },
+        "audioFilter": {
+          "type": "string",
+          "description": "FFmpeg audio filter string applied to the concatenated spoken mix, before any music. The LOCKED house default is WARM: \"volume=7dB,alimiter=limit=0.95\" (raw Rode + gentle lift, NO denoise/EQ/loudnorm — those made it robotic). Don't reach for loudnorm."
+        },
+        "music": {
+          "type": "object",
+          "description": "Optional music. Two modes: bookend (set introLen/outroLen) plays over the open + close only, faded, at moderate volume; bed (omit both) is a quiet continuous track under the whole thing. NOTE: house preference is currently NO music — only add when explicitly wanted.",
+          "required": ["file"],
+          "additionalProperties": false,
+          "properties": {
+            "file": { "type": "string", "description": "Path to the music file, relative to the pack or absolute." },
+            "volume": { "type": "number", "description": "Linear gain. Defaults: 0.5 bookend, 0.12 bed." },
+            "introLen": { "type": "number", "description": "Seconds of music over the open (presence enables bookend mode)." },
+            "outroLen": { "type": "number", "description": "Seconds of music over the close (presence enables bookend mode)." }
+          }
+        }
+      }
+    },
+    "timeline": {
+      "type": "array",
+      "description": "Ordered segments. The output is these clips concatenated in array order, each trimmed to [start,end) from its source. To CUT something, leave a gap between one segment's end and the next's start. That gap-based model is the whole core; everything else (zoom/pip/captions) decorates a segment.",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["source", "start", "end"],
+        "additionalProperties": false,
+        "properties": {
+          "source": { "type": "string", "description": "Key into `sources` — the visible roll for this segment." },
+          "start": { "type": "number", "minimum": 0, "description": "In-point in the source, seconds. (Ignored for image sources except to set duration with `end`.)" },
+          "end": { "type": "number", "exclusiveMinimum": 0, "description": "Out-point, seconds. Must be > start. For an image source, end-start sets how long the still is held." },
+          "reason": { "type": "string", "description": "Why this segment is kept / what was cut before it. For humans; ignored by renderer." },
+          "audio": { "type": "string", "description": "Per-segment audio override (a source key). Wins over the global `audio` bed — e.g. an ident's own track, or to let one segment carry its own sound." },
+          "zoom": {
+            "description": "Punch-in emphasis. Either a number (uniform scale, e.g. 1.14) or an object. Focus defaults favour the face (y high).",
+            "oneOf": [
+              { "type": "number" },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "scale": { "type": "number", "description": "Zoom factor, default 1.2." },
+                  "x": { "type": "number", "minimum": 0, "maximum": 1, "description": "Horizontal focus 0..1, default 0.5." },
+                  "y": { "type": "number", "minimum": 0, "maximum": 1, "description": "Vertical focus 0..1, default 0.34 (favours upper/face)." }
+                }
+              }
+            ]
+          },
+          "pip": {
+            "type": "object",
+            "description": "Picture-in-picture: overlay another roll in a corner (e.g. the cam in the corner while a diagram/screen fills the frame). Editor captions auto-place in the opposite corner.",
+            "required": ["source"],
+            "additionalProperties": false,
+            "properties": {
+              "source": { "type": "string", "description": "Source key to overlay." },
+              "corner": { "type": "string", "enum": ["tl", "tr", "bl", "br"], "default": "br" },
+              "width": { "type": "number", "description": "Overlay width as a fraction of canvas width, default 0.25." },
+              "margin": { "type": "number", "description": "Inset from the edge as a fraction of canvas width, default 0.02." }
+            }
+          },
+          "captions": {
+            "type": "array",
+            "description": "Burned-in captions for this segment, timed in source-time (same clock as start/end).",
+            "items": {
+              "type": "object",
+              "required": ["text", "start", "end"],
+              "additionalProperties": false,
+              "properties": {
+                "text": { "type": "string" },
+                "start": { "type": "number", "description": "Show from this source-time." },
+                "end": { "type": "number", "description": "Hide at this source-time." },
+                "style": {
+                  "type": "string",
+                  "enum": ["editor", "label", "plain"],
+                  "description": "editor = EdAtor's signed chat bubble (Anthropic cream/coral, auto-dodges the PiP) — clearly the AI's voice, NOT the speaker's. label = stumasondev production eyebrow (orange UPPERCASE mono on navy, leading dash). plain = neutral caption.",
+                  "default": "plain"
+                },
+                "by": { "type": "string", "description": "editor style only: sender tag, default \"EdAtor\"." },
+                "corner": { "type": "string", "enum": ["tl", "tr", "bl", "br"], "description": "Override auto-placement (editor/label)." },
+                "size": { "type": "number", "description": "Font size as a fraction of canvas height (label/plain)." },
+                "pos": { "type": "string", "enum": ["top", "bottom", "tl", "tr", "bl", "br"], "description": "plain style position, default bottom." },
+                "color": { "type": "string", "description": "plain style text colour." },
+                "boxcolor": { "type": "string", "description": "plain style box colour." }
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}

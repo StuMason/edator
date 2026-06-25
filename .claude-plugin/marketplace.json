@@ -1,0 +1,16 @@
+{
+  "name": "edator",
+  "description": "An AI co-producer for video. Record once; Claude decides the cut, FFmpeg executes it. No timeline, no scrubbing.",
+  "owner": {
+    "name": "Stu Mason",
+    "email": "stu@stuartmason.co.uk",
+    "url": "https://github.com/StuMason"
+  },
+  "plugins": [
+    {
+      "name": "edator",
+      "source": "./",
+      "description": "Turn a raw recording into a finished video: Claude reads the transcript + your codebase and writes an edit pack, the deterministic renderer executes it with FFmpeg."
+    }
+  ]
+}
