@@ -88,8 +88,20 @@ Driven entirely by the pack (full spec:
 - **Captions** — three styles: an EdAtor chat-bubble aside, a production eyebrow label, or a plain caption.
 - **Music** — a quiet continuous bed, or a faded intro/outro bookend.
 - **Warm audio** — a gentle, transparent polish (and a strong opinion about *not* over-processing a good mic).
+- **Escape valve** — `rawFilter` (per segment) and `output.rawVideoFilter`/`rawAudioFilter` (global): raw ffmpeg, but *inside* the pack, so it still round-trips.
 
 See the example: [`examples/edit-pack.example.json`](examples/edit-pack.example.json).
+
+### The escape valve
+
+The typed vocabulary above covers ~95% of edits. For the rest, the pack has a
+labelled valve: `rawFilter` on a segment (spliced in as the last transform on
+that frame) and `output.rawVideoFilter` / `output.rawAudioFilter` on the whole
+mix. The strings are opaque and unvalidated — *you're on your own past this line*
+— but they live **in the pack**, so "same pack → same video" still holds: the
+edit is diffable, re-renderable and version-controlled, unlike hand-run ffmpeg.
+It's ungated but warns loudly on use. If the same `rawFilter` keeps showing up,
+that's the signal to promote it into a real field.
 
 ### Run the renderer directly
 

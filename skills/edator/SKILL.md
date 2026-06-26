@@ -102,6 +102,12 @@ red flag, not a clean cut.
   don't add it. Reach for `transition:"dip"` only when you want a cut to *feel*
   like a deliberate beat (chapter break, topic change), not on every join. xfade
   isn't built yet — "dip" or a hard cut are your two options.
+- **Raw filters are the last resort, and they belong IN the pack.** If the typed
+  vocabulary can't say it, use `rawFilter` (segment) or `output.rawVideoFilter`/
+  `rawAudioFilter` — never hand-run ffmpeg outside the pack (that breaks "same
+  pack → same video"). The valve is unvalidated: you own the string. Try a typed
+  field first; raw is for the genuinely new move, and if you keep writing the
+  same one, flag it for promotion.
 - **`reason` every segment** — say what you kept and what you cut before it.
 - **Quality is a setup problem, not an edit problem.** Bad mic / low-res screen /
   busy wallpaper get fixed at the recording side (good mic, 1080p screen, clean
