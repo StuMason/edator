@@ -120,7 +120,7 @@
           "chapter": { "type": "string", "description": "Chapter title for this segment's start. Emits a YouTube-style sidecar (<output>.chapters.txt) with the cumulative output timestamp — pure metadata, never touches the video. Put a chapter on the first segment if you want a 0:00 marker." },
           "bleeps": {
             "type": "array",
-            "description": "Censor word(s) in this segment: each window's speech is muted and replaced with a gentle 1kHz tone (sat AT speech level, not above — a casual swear gets a casual bleep). Times are SOURCE-time (same clock as start/end), so a word at 9.7-10.2 is { \"start\": 9.7, \"end\": 10.2 }. Pad ~0.02s each side to cover the consonants — keep it tight, a long bleep reads as a bigger swear than was said. Honoured under speed (projected to the output clock).",
+            "description": "Censor word(s) in this segment: each window's speech is muted and replaced with a gentle 1kHz tone (sat just BELOW speech level — a casual swear gets a casual bleep, never a klaxon). Times are SOURCE-time (same clock as start/end), so a word at 9.7-10.2 is { \"start\": 9.7, \"end\": 10.2 }. Pad ~0.02s each side to cover the consonants — keep it tight, a long bleep reads as a bigger swear than was said. Honoured under speed (projected to the output clock).",
             "items": {
               "type": "object",
               "required": ["start", "end"],

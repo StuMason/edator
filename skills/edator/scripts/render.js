@@ -387,7 +387,7 @@ function buildAudioChain(seg, i, audioKey, idxOf, parts, declick) {
   // One 1kHz tone per window, delayed to land exactly over the muted word.
   const tones = windows.map((w, k) => {
     const dur = (w.b - w.a).toFixed(3), off = Math.round(w.a * 1000);
-    parts.push(`sine=frequency=1000:sample_rate=48000:duration=${dur},adelay=${off}|${off},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,volume=1[bz${i}_${k}]`);
+    parts.push(`sine=frequency=1000:sample_rate=48000:duration=${dur},adelay=${off}|${off},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,volume=0.5[bz${i}_${k}]`);
     return `[bz${i}_${k}]`;
   });
   parts.push(`[amute${i}]${tones.join("")}amix=inputs=${1 + tones.length}:duration=first:normalize=0[a${i}]`);

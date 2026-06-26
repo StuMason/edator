@@ -159,7 +159,7 @@ red flag, not a clean cut.
   punctuation mark, not a duration.
 - **Bleep, don't blast.** `bleeps` censors a word (speech muted + 1kHz tone) —
   source-timed like a caption, pad ~0.02s each side to cover the consonants. The
-  tone sits *at* speech level, not above it: a casual "shit" gets a casual bleep,
+  tone sits *just below* speech level: a casual "shit" gets a casual bleep,
   not an air-raid siren. Keep windows tight to the word — a long bleep reads as a
   bigger swear than was said.
 - **`reason` every segment** — say what you kept and what you cut before it.
