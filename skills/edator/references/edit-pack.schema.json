@@ -118,6 +118,19 @@
           "rawFilter": { "type": "string", "description": "ESCAPE VALVE — opaque ffmpeg filter spliced in as the LAST transform on this segment's finished frame (after scale/zoom/pip/captions/transition). Unvalidated by design; frames in → frames out, no label refs. Deterministic because it's in the pack. Reach for a typed field (zoom/pip/transition) first — raw is for the thing the vocabulary can't say yet." },
           "speed": { "type": "number", "exclusiveMinimum": 0, "description": "Playback rate for this segment: 2.0 = twice as fast (timelapse / jump-cut speedup), 0.5 = half (slow-mo). Video setpts + audio atempo stay locked, so A/V never drifts; the segment's OUTPUT duration becomes (end-start)/speed. Default 1." },
           "chapter": { "type": "string", "description": "Chapter title for this segment's start. Emits a YouTube-style sidecar (<output>.chapters.txt) with the cumulative output timestamp — pure metadata, never touches the video. Put a chapter on the first segment if you want a 0:00 marker." },
+          "bleeps": {
+            "type": "array",
+            "description": "Censor word(s) in this segment: each window's speech is muted and replaced with a gentle 1kHz tone (sat AT speech level, not above — a casual swear gets a casual bleep). Times are SOURCE-time (same clock as start/end), so a word at 9.7-10.2 is { \"start\": 9.7, \"end\": 10.2 }. Pad ~0.02s each side to cover the consonants — keep it tight, a long bleep reads as a bigger swear than was said. Honoured under speed (projected to the output clock).",
+            "items": {
+              "type": "object",
+              "required": ["start", "end"],
+              "additionalProperties": false,
+              "properties": {
+                "start": { "type": "number", "minimum": 0, "description": "Word start, source-time seconds." },
+                "end": { "type": "number", "exclusiveMinimum": 0, "description": "Word end, source-time seconds. Must be > start." }
+              }
+            }
+          },
           "zoom": {
             "description": "Emphasis zoom. STATIC: a number (uniform scale, e.g. 1.14) or {scale,x,y} — a fixed punch-in. ANIMATED (push): the string \"push\" (1.0→1.15 over the segment) or {from,to,x,y} — a Ken Burns move that also works on held image stills. Focus x/y default to favour the face (y high).",
             "oneOf": [

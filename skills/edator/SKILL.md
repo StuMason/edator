@@ -157,6 +157,11 @@ red flag, not a clean cut.
   joke. Want a 0.5s chromatic/glitch hit on one word? Cut a ~0.5s micro-segment at
   that word, put the rawFilter only on it, clean either side. The effect is a
   punctuation mark, not a duration.
+- **Bleep, don't blast.** `bleeps` censors a word (speech muted + 1kHz tone) —
+  source-timed like a caption, pad ~0.02s each side to cover the consonants. The
+  tone sits *at* speech level, not above it: a casual "shit" gets a casual bleep,
+  not an air-raid siren. Keep windows tight to the word — a long bleep reads as a
+  bigger swear than was said.
 - **`reason` every segment** — say what you kept and what you cut before it.
 - **Quality is a setup problem, not an edit problem.** Bad mic / low-res screen /
   busy wallpaper get fixed at the recording side (good mic, 1080p screen, clean

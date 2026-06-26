@@ -18,6 +18,10 @@ All notable changes to this project are documented here. Format based on
   markers → a YouTube-style sidecar.
 - **Cut-boundary treatment** — automatic ~5ms **declick** on every join (default on),
   and `transition: "dip"` for a deliberate dip-to-black beat.
+- **Bleeps** — per-segment `bleeps` censor a word: the speech is muted across the
+  window and a gentle 1kHz tone drops in its place. Source-timed like captions and
+  projected under `speed`. Tuned to sit *at* speech level — a casual swear gets a
+  casual bleep, not a klaxon.
 - **The raw escape valve** — `rawFilter` (per segment) + `output.rawVideoFilter` /
   `rawAudioFilter`: opaque ffmpeg *inside* the pack, so it still round-trips. Ungated
   but warns loudly — a feature-request funnel.

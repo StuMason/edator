@@ -369,7 +369,28 @@ function buildAudioChain(seg, i, audioKey, idxOf, parts, declick) {
   if (inD && dur > inD) fades.push(`afade=t=in:d=${inD}`);
   if (outD && dur > inD + outD) fades.push(`afade=t=out:st=${(dur - outD).toFixed(3)}:d=${outD}`);
   const fx = fades.length ? "," + fades.join(",") : "";
-  parts.push(`[${aIdx}:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS${atempo}${fx}[a${i}]`);
+
+  // Bleeps: censor word(s). Authored in source-time like captions; here they're
+  // projected to the segment's OUTPUT clock (÷ speed), the speech muted across
+  // each window, and a 1kHz tone dropped in its place. No bleeps → one clean line.
+  const bleeps = Array.isArray(seg.bleeps) ? seg.bleeps : [];
+  const term = bleeps.length ? `[araw${i}]` : `[a${i}]`;
+  parts.push(`[${aIdx}:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS${atempo}${fx}${term}`);
+  if (!bleeps.length) return;
+
+  const windows = bleeps
+    .map((b) => ({ a: +((b.start - seg.start) / speed).toFixed(3), b: +((b.end - seg.start) / speed).toFixed(3) }))
+    .filter((w) => w.b > w.a);
+  // Mute the speech across every window (volume=0 only while `enable` is true).
+  const enable = windows.map((w) => `between(t\\,${w.a}\\,${w.b})`).join("+");
+  parts.push(`${term}volume=0:enable=${enable}[amute${i}]`);
+  // One 1kHz tone per window, delayed to land exactly over the muted word.
+  const tones = windows.map((w, k) => {
+    const dur = (w.b - w.a).toFixed(3), off = Math.round(w.a * 1000);
+    parts.push(`sine=frequency=1000:sample_rate=48000:duration=${dur},adelay=${off}|${off},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,volume=1[bz${i}_${k}]`);
+    return `[bz${i}_${k}]`;
+  });
+  parts.push(`[amute${i}]${tones.join("")}amix=inputs=${1 + tones.length}:duration=first:normalize=0[a${i}]`);
 }
 
 // Optional music tail. Bookend = intro + outro only (faded, louder); bed =
