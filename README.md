@@ -165,6 +165,10 @@ say it right the first time. It's fine. You'll get there.)
 - `ASSEMBLYAI_API_KEY` — transcription uses [AssemblyAI](https://www.assemblyai.com/)
   (Universal-3 Pro, word timestamps + disfluencies). Only the **audio** is uploaded;
   the video never leaves your machine.
+- **Fonts** (only needed if a pack has captions): a bold sans + a mono are
+  auto-detected per OS — Arial/Menlo on macOS, DejaVu/Liberation on Linux,
+  Arial/Consolas on Windows. Override either with `EDATOR_FONT` / `EDATOR_MONO`
+  (path to a `.ttf`/`.otf`). A pack with no captions needs no font.
 
 ## What's in this repo
 

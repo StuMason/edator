@@ -35,7 +35,7 @@
 import { spawn } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import { dirname, resolve, isAbsolute, join } from "node:path";
-import { tmpdir } from "node:os";
+import { tmpdir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
 import { validatePack } from "./validate.js";
 
@@ -43,9 +43,36 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 const die = (m) => { console.error(`✗ ${m}`); process.exit(1); };
 const even = (n) => Math.max(2, Math.round(n / 2) * 2);   // h264 needs even dimensions
 
-// Fonts (macOS defaults). Override with EDATOR_FONT / EDATOR_MONO.
-const FONT = process.env.EDATOR_FONT || "/System/Library/Fonts/Supplemental/Arial Bold.ttf";
-const MONO = process.env.EDATOR_MONO || "/System/Library/Fonts/Menlo.ttc";
+// Fonts. drawtext needs a real TTF/OTF path, which differs per OS. Resolve a
+// bold sans (headings / EdAtor bubbles) and a mono (eyebrow labels) from
+// per-platform candidates, first match wins. Override either with EDATOR_FONT /
+// EDATOR_MONO. Captions are the only thing that needs a font, so resolution is
+// lazy: a pack with no captions renders even where no font is found.
+const FONT_CANDIDATES = {
+  darwin: ["/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/Library/Fonts/Arial Bold.ttf", "/System/Library/Fonts/Helvetica.ttc"],
+  linux: ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"],
+  win32: ["C:\\Windows\\Fonts\\arialbd.ttf", "C:\\Windows\\Fonts\\arial.ttf"],
+};
+const MONO_CANDIDATES = {
+  darwin: ["/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/Monaco.ttf", "/System/Library/Fonts/SFNSMono.ttf"],
+  linux: ["/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", "/usr/share/fonts/TTF/DejaVuSansMono.ttf", "/usr/share/fonts/dejavu/DejaVuSansMono.ttf"],
+  win32: ["C:\\Windows\\Fonts\\consola.ttf", "C:\\Windows\\Fonts\\cour.ttf"],
+};
+function resolveFont(envVar, candidatesByOs) {
+  if (process.env[envVar]) return process.env[envVar];   // trust the override; validated lazily
+  for (const c of candidatesByOs[platform()] || []) if (existsSync(c)) return c;
+  return null; // nothing found — only fatal if a caption actually needs it (see needFont)
+}
+const FONT = resolveFont("EDATOR_FONT", FONT_CANDIDATES);
+const MONO = resolveFont("EDATOR_MONO", MONO_CANDIDATES);
+const needFont = (which) => {
+  const mono = which === "mono";
+  const f = mono ? MONO : FONT;
+  const envVar = mono ? "EDATOR_MONO" : "EDATOR_FONT";
+  if (!f) die(`No ${mono ? "monospace" : "bold sans"} font found for captions on ${platform()}. Set ${envVar} to a .ttf/.otf file.`);
+  if (!existsSync(f)) die(`${envVar} points at a font that doesn't exist: ${f}`);
+  return f;
+};
 
 // PiP / overlay corner positions, parameterised by margin (px).
 const CORNERS = {
@@ -95,8 +122,8 @@ function drawtext(cap, segStart, Wpx, Hpx) {
     else { bubbleY = H - M - bb - thC; nameY = bubbleY - bb - gap - thN; }
     const nameFile = writeCap(cap.by || "EdAtor");
     const msgFile = writeCap(cap.text);
-    const name = `drawtext=fontfile='${FONT}':textfile='${nameFile}':fontsize=${nf}:fontcolor=${CREAM}:box=1:boxcolor=${CORAL}@0.95:boxborderw=9:${x}:y=${nameY}:${en}`;
-    const bubble = `drawtext=fontfile='${FONT}':textfile='${msgFile}':fontsize=${cf}:fontcolor=${INK}:box=1:boxcolor=${CREAM}@0.95:boxborderw=${bb}:${x}:y=${bubbleY}:${en}`;
+    const name = `drawtext=fontfile='${needFont()}':textfile='${nameFile}':fontsize=${nf}:fontcolor=${CREAM}:box=1:boxcolor=${CORAL}@0.95:boxborderw=9:${x}:y=${nameY}:${en}`;
+    const bubble = `drawtext=fontfile='${needFont()}':textfile='${msgFile}':fontsize=${cf}:fontcolor=${INK}:box=1:boxcolor=${CREAM}@0.95:boxborderw=${bb}:${x}:y=${bubbleY}:${en}`;
     return `${name},${bubble}`;
   }
 
@@ -109,7 +136,7 @@ function drawtext(cap, segStart, Wpx, Hpx) {
     const x = right ? `x=w-text_w-${m}` : `x=${m}`;
     const y = top ? `y=${m}` : `y=h-text_h-${m}`;
     const msgFile = writeCap(`—  ${String(cap.text).toUpperCase()}`);
-    return `drawtext=fontfile='${MONO}':textfile='${msgFile}':fontsize=${fs}:fontcolor=${ORANGE}:` +
+    return `drawtext=fontfile='${needFont("mono")}':textfile='${msgFile}':fontsize=${fs}:fontcolor=${ORANGE}:` +
       `box=1:boxcolor=${NAVY}@0.82:boxborderw=16:${x}:${y}:${en}`;
   }
 
@@ -123,7 +150,7 @@ function drawtext(cap, segStart, Wpx, Hpx) {
     bl: `x=${m}:y=h-text_h-${m}`, br: `x=w-text_w-${m}:y=h-text_h-${m}`,
   }[cap.pos || "bottom"];
   const msgFile = writeCap(cap.text);
-  return `drawtext=fontfile='${FONT}':textfile='${msgFile}':fontsize=${fs}:fontcolor=${cap.color || "white"}:` +
+  return `drawtext=fontfile='${needFont()}':textfile='${msgFile}':fontsize=${fs}:fontcolor=${cap.color || "white"}:` +
     `box=1:boxcolor=${cap.boxcolor || "black@0.55"}:boxborderw=18:${pos}:${en}`;
 }
 
