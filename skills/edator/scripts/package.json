@@ -8,7 +8,8 @@
     "edator-render": "./render.js",
     "edator-transcribe": "./transcribe.js",
     "edator-envelope": "./envelope.js",
-    "edator-validate": "./validate.js"
+    "edator-validate": "./validate.js",
+    "edator-preflight": "./preflight.js"
   },
   "engines": {
     "node": ">=22"

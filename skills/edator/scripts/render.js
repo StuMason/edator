@@ -38,6 +38,7 @@ import { dirname, resolve, isAbsolute, join } from "node:path";
 import { tmpdir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
 import { validatePack } from "./validate.js";
+import { segOutDur } from "./timeline.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const die = (m) => { console.error(`✗ ${m}`); process.exit(1); };
@@ -235,12 +236,6 @@ function planInputs(pack, packDir) {
 // ---------------------------------------------------------------------------
 // Build the filter graph
 // ---------------------------------------------------------------------------
-
-// A segment's duration on the OUTPUT clock: source span divided by any speed
-// factor. The single source of truth for fade timing, chapters, music length.
-function segOutDur(seg) {
-  return +((seg.end - seg.start) / (seg.speed || 1)).toFixed(3);
-}
 
 // Animated push: scale up to the `to` size, then crop a window that shrinks over
 // time (variable t) so apparent zoom ramps from `from` to `to`, then scale back
