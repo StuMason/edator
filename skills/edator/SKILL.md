@@ -64,8 +64,34 @@ Record plugin) so they share a clock — then the same `start`/`end` addresses t
 same instant in either roll, and roll-switching / PiP sync for free with no
 alignment step. See `references/obs-setup.md`.
 
+## Follow the director — in-video direction is a cut instruction
+
+The presenter often tells you the cut *out loud, in the recording*. **Listen for it
+and obey it.** Deixis and demonstratives are explicit instructions, not chatter:
+
+- **"this is my screen / here / this"** → CUT TO THE SCREEN. They are pointing at it.
+- **"picture-in-picture like this"** → do a PiP, there.
+- **"a comment / something rude underneath while I'm talking"** → an EdAtor caption
+  underneath, on that line.
+- **"let me show you / over here / watch this"** → switch to whatever they mean.
+
+Missing these is the worst failure — the video literally handed you the edit and you
+ignored it. Map the cues to cuts *before* anything else.
+
+## Show the screen (don't hide it)
+
+For any screen-share / dev video, **the screen is the hero and the face is the PiP**,
+not the other way round. The default bias toward a safe talking-head — or replacing
+the real screen with a clean card — throws away the most informative roll. If the
+screen looks cluttered, **frame it** (zoom/crop to the active region), don't avoid it.
+`report.js` reports roll-balance for exactly this reason: "face 95% / screen 5%" is a
+red flag, not a clean cut.
+
 ## Editorial defaults (learned the hard way)
 
+- **No dead air at the open.** Trim the first segment to the real speech onset
+  (`envelope.js`), not an eyeballed start — a second of silence up top reads as broken.
+- **Idents bookend by default.** Don't drop them for a "raw" vibe unless asked.
 - **Cut tighter than feels comfortable.** Less talking-head, shorter overall. Long
   and static is the failure mode. Drop a beat that doesn't earn its place.
 - **Visual variety by default** — rotate the moves; don't repeat the same two
@@ -73,6 +99,9 @@ alignment step. See `references/obs-setup.md`.
 - **No nonsense decoration.** Don't staple unrelated subheaders onto cards. If it
   doesn't belong, it doesn't go in.
 - **`reason` every segment** — say what you kept and what you cut before it.
+- **Quality is a setup problem, not an edit problem.** Bad mic / low-res screen /
+  busy wallpaper get fixed at the recording side (good mic, 1080p screen, clean
+  desktop) — no edit lifts a quality ceiling the recording didn't have.
 
 ## EdAtor on screen (the bit)
 

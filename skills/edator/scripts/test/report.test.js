@@ -31,6 +31,26 @@ test("report text mode prints all four scorecard dimensions", () => {
   }
 });
 
+test("roll-balance is reported and a barely-shown roll is flagged", () => {
+  // two-roll pack that keeps the screen hidden (face 90%) — the v1 fault
+  const pack = {
+    version: "1.1",
+    sources: { face: { file: "f.mp4" }, screen: { file: "s.mp4" } },
+    audio: "screen",
+    output: { width: 1280, height: 720 },
+    timeline: [{ source: "face", start: 0, end: 18 }, { source: "screen", start: 18, end: 20 }],
+  };
+  const tmp = resolve(__dirname, "_tmp_rolls.json");
+  spawnSync("node", ["-e", `require('fs').writeFileSync(${JSON.stringify(tmp)}, ${JSON.stringify(JSON.stringify(pack))})`]);
+  const j = JSON.parse(run([tmp, "--json"]).stdout);
+  const text = run([tmp]).stdout;
+  spawnSync("rm", ["-f", tmp]);
+  assert.ok(Array.isArray(j.rollBalance) && j.rollBalance[0].source === "face", "face should be the dominant roll");
+  assert.ok(j.rollBalance[0].pct > 0.85, "face should be >85%");
+  assert.ok(text.includes("ROLLS"), "scorecard prints a ROLLS line");
+  assert.ok(text.includes("dominates"), "a dominated roll should be flagged");
+});
+
 test("report flags an over-processed (non-warm) audio filter", () => {
   // build a pack with loudnorm and check the JSON flags it
   const pack = {
