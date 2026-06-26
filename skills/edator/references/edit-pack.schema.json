@@ -59,6 +59,11 @@
           "type": "string",
           "description": "FFmpeg audio filter string applied to the concatenated spoken mix, before any music. The LOCKED house default is WARM: \"volume=7dB,alimiter=limit=0.95\" (raw Rode + gentle lift, NO denoise/EQ/loudnorm — those made it robotic). Don't reach for loudnorm."
         },
+        "declick": {
+          "type": "boolean",
+          "default": true,
+          "description": "Whether to apply an automatic ~5ms audio fade at every segment boundary so hard cuts don't click/pop on non-onset joins. On by default — this is hygiene, not a creative choice. Set false only to debug a raw splice."
+        },
         "music": {
           "type": "object",
           "description": "Optional music. Two modes: bookend (set introLen/outroLen) plays over the open + close only, faded, at moderate volume; bed (omit both) is a quiet continuous track under the whole thing. NOTE: house preference is currently NO music — only add when explicitly wanted.",
@@ -86,6 +91,21 @@
           "start": { "type": "number", "minimum": 0, "description": "In-point in the source, seconds. (Ignored for image sources except to set duration with `end`.)" },
           "end": { "type": "number", "exclusiveMinimum": 0, "description": "Out-point, seconds. Must be > start. For an image source, end-start sets how long the still is held." },
           "reason": { "type": "string", "description": "Why this segment is kept / what was cut before it. For humans; ignored by renderer." },
+          "transition": {
+            "description": "Boundary treatment at the join BEFORE this segment. \"dip\" (or {\"type\":\"dip\",\"dur\":0.4}) dips to black + dips the audio at the join — a soft, deliberate beat between this segment and the previous one, without changing segment timing. xfade (true overlap-crossfade) is not implemented yet. Hard cuts already declick automatically; reach for a dip only when you want the cut to FEEL like a transition.",
+            "oneOf": [
+              { "type": "string", "enum": ["dip"] },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["type"],
+                "properties": {
+                  "type": { "type": "string", "enum": ["dip"], "description": "Only \"dip\" is implemented today." },
+                  "dur": { "type": "number", "exclusiveMinimum": 0, "description": "Dip half-length in seconds (each side of the join), default 0.12." }
+                }
+              }
+            ]
+          },
           "audio": { "type": "string", "description": "Per-segment audio override (a source key). Wins over the global `audio` bed — e.g. an ident's own track, or to let one segment carry its own sound." },
           "zoom": {
             "description": "Punch-in emphasis. Either a number (uniform scale, e.g. 1.14) or an object. Focus defaults favour the face (y high).",

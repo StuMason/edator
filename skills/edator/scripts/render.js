@@ -271,6 +271,16 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     .map((c) => drawtext(c.style === "editor" && !c.corner ? { ...c, corner: editorCorner } : c, seg.start, W, H))
     .join(",");
 
+  // Dip-to-black transition: fade this segment in from black at its head, and/or
+  // out to black at its tail (stamped when a neighbour requests a dip). It's a
+  // trailing fade on the finished frame, so the concat spine is untouched.
+  const segDur = +(seg.end - seg.start).toFixed(3);
+  const vfades = [];
+  if (seg._dipIn) vfades.push(`fade=t=in:st=0:d=${seg._dipIn}`);
+  if (seg._dipOut) vfades.push(`fade=t=out:st=${(segDur - seg._dipOut).toFixed(3)}:d=${seg._dipOut}`);
+  // Where the composited frame lands before the optional fade pass.
+  const vTerm = vfades.length ? `[vpre${i}]` : `[v${i}]`;
+
   if (seg.pip) {
     const pIdx = idxOf(seg.pip.source, `Segment ${i} pip`);
     const pw = even((W || 1280) * (seg.pip.width || 0.25));
@@ -278,22 +288,34 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     const pos = (CORNERS[seg.pip.corner] || CORNERS.br)(margin);
     parts.push(`${base.join(",")}[base${i}]`);
     parts.push(`[${pIdx}:v]trim=start=${seg.start}:end=${seg.end},setpts=PTS-STARTPTS,scale=${pw}:-2,setsar=1[pip${i}]`);
-    const ovOut = capChain ? `[ov${i}]` : `[v${i}]`;
+    const ovOut = capChain ? `[ov${i}]` : vTerm;
     parts.push(`[base${i}][pip${i}]overlay=${pos}:eof_action=repeat${ovOut}`);
-    if (capChain) parts.push(`[ov${i}]${capChain}[v${i}]`);
+    if (capChain) parts.push(`[ov${i}]${capChain}${vTerm}`);
   } else {
     const baseStr = base.join(",");
-    parts.push(capChain ? `${baseStr},${capChain}[v${i}]` : `${baseStr}[v${i}]`);
+    parts.push(capChain ? `${baseStr},${capChain}${vTerm}` : `${baseStr}${vTerm}`);
   }
+  if (vfades.length) parts.push(`${vTerm}${vfades.join(",")}[v${i}]`);
 }
 
 // Audio chain for one segment, ending at label [aN]. Source precedence:
 // per-segment override → global bed → the segment's own roll.
-function buildAudioChain(seg, i, audioKey, idxOf, parts) {
+//
+// Boundary fades are unified here: a hard splice clicks when it lands mid-room-
+// tone, so every join gets a short afade in/out. Declick is just the 5ms default;
+// a "dip" transition is the same fade, longer (seg._dipIn / seg._dipOut, in s).
+function buildAudioChain(seg, i, audioKey, idxOf, parts, declick) {
   const aKey = seg.audio || audioKey;
   if (seg._isImage && !aKey) die(`Segment ${i} is a B-roll still — set pack.audio or this segment's "audio" so the narration plays under it.`);
   const aIdx = aKey ? idxOf(aKey, `Segment ${i} audio`) : seg._vIdx;
-  parts.push(`[${aIdx}:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS[a${i}]`);
+  const dur = +(seg.end - seg.start).toFixed(3);
+  const inD = seg._dipIn || (declick ? 0.005 : 0);
+  const outD = seg._dipOut || (declick ? 0.005 : 0);
+  const fades = [];
+  if (inD && dur > inD) fades.push(`afade=t=in:d=${inD}`);
+  if (outD && dur > inD + outD) fades.push(`afade=t=out:st=${(dur - outD).toFixed(3)}:d=${outD}`);
+  const fx = fades.length ? "," + fades.join(",") : "";
+  parts.push(`[${aIdx}:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS${fx}[a${i}]`);
 }
 
 // Optional music tail. Bookend = intro + outro only (faded, louder); bed =
@@ -316,6 +338,18 @@ function buildMusicTail(music, musicIdx, bookend, totalDur, inLabel, parts) {
   return "[outmix]";
 }
 
+// Resolve a segment's `transition` to a dip half-length in seconds, or null for
+// no transition. xfade is intentionally rejected (not a freebie — it folds the
+// concat spine; see issue #3) rather than silently ignored.
+function parseDip(transition, i) {
+  if (!transition) return null;
+  const type = typeof transition === "string" ? transition : transition.type;
+  if (type === "xfade") die(`Segment ${i}: transition "xfade" isn't implemented yet — use "dip", or leave it a hard cut.`);
+  if (type !== "dip") die(`Segment ${i}: unknown transition "${type}" — only "dip" is supported.`);
+  const dur = typeof transition === "object" && transition.dur != null ? +transition.dur : 0.12;
+  return Math.max(0.04, dur);
+}
+
 function buildGraph(pack, plan) {
   const out = pack.output || {};
   const W = Number.isInteger(out.width) ? out.width : null;
@@ -330,12 +364,24 @@ function buildGraph(pack, plan) {
   const audioKey = pack.audio || null;
   if (audioKey) plan.idxOf(audioKey, "audio bed");
 
+  // Boundary fades. Declick (hygiene) is on unless explicitly disabled. A "dip"
+  // transition on a segment is a longer fade straddling the join BEFORE it — so
+  // it stamps a fade-in on that segment AND a fade-out on its predecessor.
+  const declick = out.declick !== false;
+  pack.timeline.forEach((seg, i) => {
+    const d = parseDip(seg.transition, i);
+    if (d) {
+      seg._dipIn = d;
+      if (i > 0) pack.timeline[i - 1]._dipOut = d;
+    }
+  });
+
   const parts = [];
   const concatLabels = [];
   pack.timeline.forEach((seg, i) => {
     seg._fps = fps;
     buildVideoChain(seg, i, W, H, plan.idxOf, parts);
-    buildAudioChain(seg, i, audioKey, plan.idxOf, parts);
+    buildAudioChain(seg, i, audioKey, plan.idxOf, parts, declick);
     concatLabels.push(`[v${i}][a${i}]`);
   });
 

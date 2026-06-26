@@ -78,6 +78,8 @@ Driven entirely by the pack (full spec:
 [`skills/edator/references/edit-pack.schema.json`](skills/edator/references/edit-pack.schema.json)):
 
 - **Cuts** — a timeline of `[start,end)` segments, concatenated. Leave a gap to cut.
+- **Declick** — every hard cut gets an automatic ~5ms audio fade so joins don't pop. On by default; it's hygiene, not a knob.
+- **Dip transitions** — `transition:"dip"` on a segment dips to black + dips the audio at the join, when you want a cut to *feel* like a beat.
 - **Roll-switching** — each segment picks which roll is visible (e.g. screen ↔ camera).
 - **Audio bed** — one source's audio plays continuously while the video switches above it.
 - **Zoom punch-ins** — emphasis zoom, with a focus point.

@@ -98,6 +98,10 @@ red flag, not a clean cut.
   effects. A roll-switch, a punch-in, a card, an aside, a label — keep it moving.
 - **No nonsense decoration.** Don't staple unrelated subheaders onto cards. If it
   doesn't belong, it doesn't go in.
+- **Cuts declick themselves.** Every join gets an automatic 5ms audio fade — you
+  don't add it. Reach for `transition:"dip"` only when you want a cut to *feel*
+  like a deliberate beat (chapter break, topic change), not on every join. xfade
+  isn't built yet — "dip" or a hard cut are your two options.
 - **`reason` every segment** — say what you kept and what you cut before it.
 - **Quality is a setup problem, not an edit problem.** Bad mic / low-res screen /
   busy wallpaper get fixed at the recording side (good mic, 1080p screen, clean

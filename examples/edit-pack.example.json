@@ -26,6 +26,7 @@
     { "source": "cam", "start": 24.0, "end": 33.0, "zoom": 1.14, "reason": "Cut a fumbled retake (18-24); punch in on the key claim." },
 
     { "source": "diagram", "start": 33.0, "end": 44.0, "reason": "Hold the architecture diagram while he explains it; keep him in the corner.",
+      "transition": "dip",
       "pip": { "source": "cam", "corner": "br", "width": 0.26, "margin": 0.02 },
       "captions": [
         { "text": "read-only API", "style": "label", "start": 35.0, "end": 39.0 },
