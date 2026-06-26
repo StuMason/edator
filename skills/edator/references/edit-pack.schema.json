@@ -116,15 +116,20 @@
           },
           "audio": { "type": "string", "description": "Per-segment audio override (a source key). Wins over the global `audio` bed — e.g. an ident's own track, or to let one segment carry its own sound." },
           "rawFilter": { "type": "string", "description": "ESCAPE VALVE — opaque ffmpeg filter spliced in as the LAST transform on this segment's finished frame (after scale/zoom/pip/captions/transition). Unvalidated by design; frames in → frames out, no label refs. Deterministic because it's in the pack. Reach for a typed field (zoom/pip/transition) first — raw is for the thing the vocabulary can't say yet." },
+          "speed": { "type": "number", "exclusiveMinimum": 0, "description": "Playback rate for this segment: 2.0 = twice as fast (timelapse / jump-cut speedup), 0.5 = half (slow-mo). Video setpts + audio atempo stay locked, so A/V never drifts; the segment's OUTPUT duration becomes (end-start)/speed. Default 1." },
+          "chapter": { "type": "string", "description": "Chapter title for this segment's start. Emits a YouTube-style sidecar (<output>.chapters.txt) with the cumulative output timestamp — pure metadata, never touches the video. Put a chapter on the first segment if you want a 0:00 marker." },
           "zoom": {
-            "description": "Punch-in emphasis. Either a number (uniform scale, e.g. 1.14) or an object. Focus defaults favour the face (y high).",
+            "description": "Emphasis zoom. STATIC: a number (uniform scale, e.g. 1.14) or {scale,x,y} — a fixed punch-in. ANIMATED (push): the string \"push\" (1.0→1.15 over the segment) or {from,to,x,y} — a Ken Burns move that also works on held image stills. Focus x/y default to favour the face (y high).",
             "oneOf": [
               { "type": "number" },
+              { "type": "string", "enum": ["push"] },
               {
                 "type": "object",
                 "additionalProperties": false,
                 "properties": {
-                  "scale": { "type": "number", "description": "Zoom factor, default 1.2." },
+                  "scale": { "type": "number", "description": "Static zoom factor, default 1.2. Mutually exclusive with from/to." },
+                  "from": { "type": "number", "description": "Animated push: start zoom, default 1.0." },
+                  "to": { "type": "number", "description": "Animated push: end zoom, default 1.15." },
                   "x": { "type": "number", "minimum": 0, "maximum": 1, "description": "Horizontal focus 0..1, default 0.5." },
                   "y": { "type": "number", "minimum": 0, "maximum": 1, "description": "Vertical focus 0..1, default 0.34 (favours upper/face)." }
                 }

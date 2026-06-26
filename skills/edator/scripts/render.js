@@ -99,10 +99,12 @@ const writeCap = (txt) => { const f = join(capDir, `c${capN++}.txt`); writeFileS
 //   style "label"  → stumasondev production eyebrow: orange UPPERCASE mono with a
 //     leading dash on a navy strip. The brand's tell.
 //   anything else  → a plain neutral caption.
-function drawtext(cap, segStart, Wpx, Hpx) {
+function drawtext(cap, segStart, Wpx, Hpx, speed = 1) {
   const H = Hpx || 720;
-  const a = (cap.start - segStart).toFixed(3);
-  const b = (cap.end - segStart).toFixed(3);
+  // Captions are authored in source-time; a sped-up segment compresses the
+  // output clock, so the on-screen window divides by the speed factor.
+  const a = ((cap.start - segStart) / speed).toFixed(3);
+  const b = ((cap.end - segStart) / speed).toFixed(3);
   const en = `enable=between(t\\,${a}\\,${b})`;
 
   if (cap.style === "editor") {
@@ -234,23 +236,60 @@ function planInputs(pack, packDir) {
 // Build the filter graph
 // ---------------------------------------------------------------------------
 
+// A segment's duration on the OUTPUT clock: source span divided by any speed
+// factor. The single source of truth for fade timing, chapters, music length.
+function segOutDur(seg) {
+  return +((seg.end - seg.start) / (seg.speed || 1)).toFixed(3);
+}
+
+// Animated push: scale up to the `to` size, then crop a window that shrinks over
+// time (variable t) so apparent zoom ramps from `from` to `to`, then scale back
+// to canvas. Deterministic (a plain expression, no per-frame accumulator) — and
+// snapshot-stable, unlike zoompan. dur is the segment's OUTPUT duration.
+function pushFilters(z, W, H, dur) {
+  const from = z.from != null ? z.from : 1.0;
+  const to = z.to != null ? z.to : 1.15;
+  const fx = z.x != null ? z.x : 0.5;
+  const fy = z.y != null ? z.y : 0.34;
+  const Wto = even(W * to), Hto = even(H * to);
+  const zt = `(${from}+(${to}-${from})*t/${dur.toFixed(3)})`;   // apparent zoom at time t
+  return [
+    `scale=${Wto}:${Hto}`,
+    `crop=w='${W}*${to}/${zt}':h='${H}*${to}/${zt}':x='(in_w-out_w)*${fx}':y='(in_h-out_h)*${fy}'`,
+    `scale=${W}:${H}`,
+  ];
+}
+
+// Is this zoom an animated push (push shorthand or from/to) vs a static crop?
+const isPush = (z) => z === "push" || (typeof z === "object" && (z.from != null || z.to != null));
+
 // Video chain for one segment, ending at label [vN] (writes intermediate labels
 // for pip). W/H may be null when the timeline is single-roll and unscaled.
 function buildVideoChain(seg, i, W, H, idxOf, parts) {
   const wantScale = W && H;
   const wantFps = Number.isInteger(seg._fps);   // _fps stamped by caller from output.fps
+  const speed = seg.speed || 1;
+  // Speed retiming folds straight into the de-jitter setpts: /speed compresses.
+  const setpts = speed !== 1 ? `setpts=(PTS-STARTPTS)/${speed}` : "setpts=PTS-STARTPTS";
+
+  if (seg.zoom && isPush(seg.zoom) && !wantScale) die(`Segment ${i}: an animated zoom ("push") needs a canvas — set output.width/height.`);
 
   const base = [];
   if (seg._isImage) {
     // Held still: fit to canvas, no trim (the input is already looped to length).
     base.push(`[${seg._vIdx}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
+    if (seg.zoom && isPush(seg.zoom)) base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg)));   // Ken Burns on a still
     if (wantFps) base.push(`fps=${seg._fps}`);
     base.push("setsar=1");
   } else {
-    base.push(`[${seg._vIdx}:v]trim=start=${seg.start}:end=${seg.end}`, "setpts=PTS-STARTPTS");
-    if (seg.zoom && wantScale) {
-      // Punch-in: scale up then crop back to canvas. zoom = number, or {scale,x,y}
-      // where x/y are focus points 0..1 (y defaults high to favour the face).
+    base.push(`[${seg._vIdx}:v]trim=start=${seg.start}:end=${seg.end}`, setpts);
+    if (seg.zoom && isPush(seg.zoom) && wantScale) {
+      // Animated push: normalise to canvas, then ramp the zoom over the segment.
+      base.push(`scale=${W}:${H}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
+      base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg)));
+    } else if (seg.zoom && wantScale) {
+      // Static punch-in: scale up then crop back to canvas. zoom = number, or
+      // {scale,x,y} where x/y are focus points 0..1 (y defaults high for the face).
       const z = typeof seg.zoom === "number" ? seg.zoom : (seg.zoom.scale || 1.2);
       const fx = typeof seg.zoom === "object" && seg.zoom.x != null ? seg.zoom.x : 0.5;
       const fy = typeof seg.zoom === "object" && seg.zoom.y != null ? seg.zoom.y : 0.34;
@@ -268,13 +307,14 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
   const caps = Array.isArray(seg.captions) ? seg.captions : [];
   const editorCorner = seg.pip && (seg.pip.corner || "br").endsWith("r") ? "bl" : "br";
   const capChain = caps
-    .map((c) => drawtext(c.style === "editor" && !c.corner ? { ...c, corner: editorCorner } : c, seg.start, W, H))
+    .map((c) => drawtext(c.style === "editor" && !c.corner ? { ...c, corner: editorCorner } : c, seg.start, W, H, speed))
     .join(",");
 
   // Dip-to-black transition: fade this segment in from black at its head, and/or
   // out to black at its tail (stamped when a neighbour requests a dip). It's a
   // trailing fade on the finished frame, so the concat spine is untouched.
-  const segDur = +(seg.end - seg.start).toFixed(3);
+  // Timing is OUTPUT-clock (speed-aware), so the dip lands at the real tail.
+  const segDur = segOutDur(seg);
   const tail = [];
   if (seg._dipIn) tail.push(`fade=t=in:st=0:d=${seg._dipIn}`);
   if (seg._dipOut) tail.push(`fade=t=out:st=${(segDur - seg._dipOut).toFixed(3)}:d=${seg._dipOut}`);
@@ -291,7 +331,7 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     const margin = Math.round((W || 1280) * (seg.pip.margin ?? 0.02));
     const pos = (CORNERS[seg.pip.corner] || CORNERS.br)(margin);
     parts.push(`${base.join(",")}[base${i}]`);
-    parts.push(`[${pIdx}:v]trim=start=${seg.start}:end=${seg.end},setpts=PTS-STARTPTS,scale=${pw}:-2,setsar=1[pip${i}]`);
+    parts.push(`[${pIdx}:v]trim=start=${seg.start}:end=${seg.end},${setpts},scale=${pw}:-2,setsar=1[pip${i}]`);
     const ovOut = capChain ? `[ov${i}]` : vTerm;
     parts.push(`[base${i}][pip${i}]overlay=${pos}:eof_action=repeat${ovOut}`);
     if (capChain) parts.push(`[ov${i}]${capChain}${vTerm}`);
@@ -308,18 +348,32 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
 // Boundary fades are unified here: a hard splice clicks when it lands mid-room-
 // tone, so every join gets a short afade in/out. Declick is just the 5ms default;
 // a "dip" transition is the same fade, longer (seg._dipIn / seg._dipOut, in s).
+// atempo only accepts 0.5–2.0 per stage, so decompose a speed factor into a
+// chain that multiplies back to it (e.g. 4× → atempo=2,atempo=2). Keeps audio
+// in lock-step with the video's setpts retime, so A/V never drifts.
+function atempoChain(speed) {
+  const fs = [];
+  let s = speed;
+  while (s > 2.0 + 1e-9) { fs.push(2.0); s /= 2.0; }
+  while (s < 0.5 - 1e-9) { fs.push(0.5); s /= 0.5; }
+  fs.push(+s.toFixed(6));
+  return fs.map((f) => `atempo=${f}`);
+}
+
 function buildAudioChain(seg, i, audioKey, idxOf, parts, declick) {
   const aKey = seg.audio || audioKey;
   if (seg._isImage && !aKey) die(`Segment ${i} is a B-roll still — set pack.audio or this segment's "audio" so the narration plays under it.`);
   const aIdx = aKey ? idxOf(aKey, `Segment ${i} audio`) : seg._vIdx;
-  const dur = +(seg.end - seg.start).toFixed(3);
+  const speed = seg.speed || 1;
+  const atempo = speed !== 1 ? "," + atempoChain(speed).join(",") : "";
+  const dur = segOutDur(seg);   // post-atempo (output-clock) duration — fades hang off this
   const inD = seg._dipIn || (declick ? 0.005 : 0);
   const outD = seg._dipOut || (declick ? 0.005 : 0);
   const fades = [];
   if (inD && dur > inD) fades.push(`afade=t=in:d=${inD}`);
   if (outD && dur > inD + outD) fades.push(`afade=t=out:st=${(dur - outD).toFixed(3)}:d=${outD}`);
   const fx = fades.length ? "," + fades.join(",") : "";
-  parts.push(`[${aIdx}:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS${fx}[a${i}]`);
+  parts.push(`[${aIdx}:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS${atempo}${fx}[a${i}]`);
 }
 
 // Optional music tail. Bookend = intro + outro only (faded, louder); bed =
@@ -403,7 +457,7 @@ function buildGraph(pack, plan) {
   if (out.rawAudioFilter) { parts.push(`${aMap}${out.rawAudioFilter}[outraf]`); aMap = "[outraf]"; }
 
   if (out.music) {
-    const totalDur = pack.timeline.reduce((s, sg) => s + (sg.end - sg.start), 0);
+    const totalDur = pack.timeline.reduce((s, sg) => s + segOutDur(sg), 0);
     aMap = buildMusicTail(out.music, plan.musicIdx, plan.bookend, totalDur, aMap, parts);
   }
 
@@ -443,6 +497,26 @@ function warnRawValve(pack) {
   }
 }
 
+// Chapter markers → a YouTube-style sidecar (`<output>.chapters.txt`, one
+// "M:SS Title" line per chaptered segment at its cumulative OUTPUT time). Pure
+// metadata: it never touches the video graph. Returns the lines (for dry-run
+// preview) and writes the file when a path is given.
+function buildChapters(pack) {
+  const lines = [];
+  let t = 0;
+  for (const seg of pack.timeline) {
+    if (seg.chapter) lines.push(`${fmtTimecode(t)} ${seg.chapter}`);
+    t += segOutDur(seg);
+  }
+  return lines;
+}
+
+function fmtTimecode(t) {
+  const s = Math.floor(t % 60), m = Math.floor(t / 60) % 60, h = Math.floor(t / 3600);
+  const ss = String(s).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${ss}` : `${m}:${ss}`;
+}
+
 async function main() {
   const argv = process.argv.slice(2);
   if (argv.length === 0 || argv.includes("-h") || argv.includes("--help")) {
@@ -479,9 +553,18 @@ async function main() {
   console.log(`Segments  : ${graph.segments}${graph.audioKey ? `  ·  audio bed: ${graph.audioKey}` : ""}${graph.multiRoll ? "  ·  multi-roll" : ""}`);
   console.log(`Output    : ${outPath}`);
 
+  const chapters = buildChapters(pack);
+
   if (dryRun) {
+    if (chapters.length) console.log(`Chapters  : ${chapters.length} → ${outPath.replace(/\.[^.]+$/, "")}.chapters.txt`);
     console.log("\n--- filter_complex ---\n" + graph.filterComplex);
     process.exit(0);
+  }
+
+  if (chapters.length) {
+    const chPath = outPath.replace(/\.[^.]+$/, "") + ".chapters.txt";
+    writeFileSync(chPath, chapters.join("\n") + "\n");
+    console.log(`Chapters  : ${chapters.length} → ${chPath}`);
   }
 
   const child = spawn("ffmpeg", args, { stdio: ["ignore", "inherit", "inherit"] });

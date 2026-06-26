@@ -82,7 +82,9 @@ Driven entirely by the pack (full spec:
 - **Dip transitions** — `transition:"dip"` on a segment dips to black + dips the audio at the join, when you want a cut to *feel* like a beat.
 - **Roll-switching** — each segment picks which roll is visible (e.g. screen ↔ camera).
 - **Audio bed** — one source's audio plays continuously while the video switches above it.
-- **Zoom punch-ins** — emphasis zoom, with a focus point.
+- **Zoom punch-ins** — static emphasis zoom, or an animated `push` (Ken Burns) on footage or a held still.
+- **Speed ramps** — per-segment `speed` for timelapse / jump-cut speedups (or slow-mo); audio stays locked to video.
+- **Chapters** — per-segment `chapter` titles emit a YouTube-style sidecar; pure metadata, no graph change.
 - **Picture-in-picture** — drop a roll into a corner (e.g. the camera over a diagram).
 - **Image B-roll** — hold a still (diagram / card) full-frame while narration continues.
 - **Captions** — three styles: an EdAtor chat-bubble aside, a production eyebrow label, or a plain caption.

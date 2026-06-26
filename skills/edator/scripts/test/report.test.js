@@ -15,11 +15,12 @@ test("report --json emits the scorecard metrics for the example pack", () => {
   assert.equal(r.status, 0, r.stderr);
   const j = JSON.parse(r.stdout);
   assert.ok(j.runtime > 0, "runtime should be positive");
-  assert.equal(j.segments, 4, "example has 4 segments");
+  assert.equal(j.segments, 5, "example has 5 segments");
   assert.ok("talkingHeadPct" in j);
   assert.ok(j.moves.pip >= 1, "example uses a pip");
   assert.ok(j.moves.zoom >= 1, "example uses a zoom");
   assert.ok(j.moves.image >= 1, "example uses an image B-roll");
+  assert.ok(j.moves.speed >= 1, "example uses a speed ramp");
   assert.deepEqual(j.validationErrors, [], "example should validate clean");
 });
 
