@@ -65,6 +65,16 @@ write a pack — every field there is executed; nothing is reserved.
    static, or a dragger is flagged, fix the pack and re-render. This is how the edit
    improves instead of shipping blind — don't skip it, and don't reach for ad-hoc
    ffmpeg to "fix it in post" before checking the cut is already fine.
+9. **Audit the output's audio (the cut you can't hear by reading the source).**
+   Transcribe the *rendered* file — `node scripts/transcribe.js out/<file>.mp4` —
+   and read it back for repeats and bad joins. A source-only read misses these: a
+   segment that ends a beat too late leaves a false start ("at the moment I'm
+   using— at the moment it's using…"), or a cut lands mid-word. The output
+   transcript is the ground truth of how the cut actually *sounds*. It's a paid
+   re-transcribe, so it's optional — but it's the cheapest way to catch the audio
+   jank the contact sheet can't show. (Cheaper proxy: the cut's audio is exactly
+   the kept `[start,end)` spans of the source transcript — scan those for repeats
+   before paying.)
 
 ## Two-roll recording (optional but great)
 
@@ -87,6 +97,14 @@ and obey it.** Deixis and demonstratives are explicit instructions, not chatter:
 Missing these is the worst failure — the video literally handed you the edit and you
 ignored it. Map the cues to cuts *before* anything else.
 
+And the cue isn't always a direct "look here". *"I've got OBS running, let me bring
+that on screen"* is an instruction too — they're telling you the screen now shows
+something worth seeing. **Verify the roll before you decide.** Sample frames of the
+screen at each beat (`ffmpeg -ss <t> -i screen.mp4 -frames:v 1 out.jpg`) — the
+screen content *changes* (a repo, then an app window, then a terminal). Don't assume
+it's static and stay on the face: a frame check showed the OBS window was up for 14
+seconds while the editor sat on a talking-head and missed it.
+
 ## Show the screen (don't hide it)
 
 For any screen-share / dev video, **the screen is the hero and the face is the PiP**,
@@ -101,6 +119,10 @@ red flag, not a clean cut.
 - **No dead air at the open.** Trim the first segment to the real speech onset
   (`envelope.js`), not an eyeballed start — a second of silence up top reads as broken.
 - **Idents bookend by default.** Don't drop them for a "raw" vibe unless asked.
+- **Cold open, then ident.** A few seconds of what's-about-to-happen — the punchiest
+  hook line, played straight — *before* the ident sting drops. Grabs attention with a
+  question, then the brand hits, then you're into it. The hook is usually the
+  presenter's natural strong opener; let it open cold, then start the body after it.
 - **Cut tighter than feels comfortable.** Less talking-head, shorter overall. Long
   and static is the failure mode. Drop a beat that doesn't earn its place.
 - **Visual variety by default** — rotate the moves; don't repeat the same two
@@ -125,6 +147,16 @@ red flag, not a clean cut.
   pack → same video"). The valve is unvalidated: you own the string. Try a typed
   field first; raw is for the genuinely new move, and if you keep writing the
   same one, flag it for promotion.
+- **Effects are accents, not a wash.** A global grade/vignette over the *whole*
+  film dulls the screen-share and fades the captions (rawFilter applies *after*
+  drawtext, so it dims your own text). Stylise specific beats — a graded cold open,
+  a chromatic pop on a punchline — and leave the core, and every screen-share,
+  clean. Never grade under a caption.
+- **A constant rawFilter spans the whole segment — so for a PUNCH, split.** A glitch
+  on a 6-second segment runs for 6 seconds and reads as "something broke", not a
+  joke. Want a 0.5s chromatic/glitch hit on one word? Cut a ~0.5s micro-segment at
+  that word, put the rawFilter only on it, clean either side. The effect is a
+  punctuation mark, not a duration.
 - **`reason` every segment** — say what you kept and what you cut before it.
 - **Quality is a setup problem, not an edit problem.** Bad mic / low-res screen /
   busy wallpaper get fixed at the recording side (good mic, 1080p screen, clean
@@ -136,6 +168,15 @@ A co-presenter, not an effects menu. Range: full-screen takeover ("HELLO EVERYON
 when teed up), signed chat-bubble asides (`style:"editor"`), time-skips
 (FADEOUT → "43 hours later"), production labels (`style:"label"`), B-roll it "made",
 punch-ins. A recurring gag (with a payoff) beats scattered one-liners.
+
+The beats that actually land — the fill-in (supply what they forgot), the wink, the
+cheeky-correction-on-harmless-facts, getting told off and rolling with it — plus the
+hard limits and, most importantly, **how to calibrate EdAtor to a specific presenter
+through their feedback**, are in `references/personality.md`. Read it. The default
+character is strong, but the reason a cut ends up *exactly right* for someone is the
+tuning loop: cut → they react in their own words → log what lands → apply next time.
+A new presenter starts at the default and converges fast if you stop re-making a
+call they already corrected.
 
 ## Hard limits — these protect the presenter, never cross them
 
