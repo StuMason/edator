@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: skills/edator/scripts
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # ajv (optional) — enables the structural schema layer of validate.js and
+      # is needed for the validate tests. Everything else is dependency-free.
+      - name: Install deps
+        run: npm install
+
+      # Catch syntax errors before running anything.
+      - name: Syntax check
+        run: |
+          for f in *.js; do node --check "$f"; done
+
+      # node:test suite — semantic + structural validation, scorecard/roll-balance,
+      # cross-platform font resolution, and the golden filter_complex snapshots.
+      # The snapshots pin fonts to committed fixtures, so no system fonts or ffmpeg
+      # are needed: dry-run builds the graph without touching media.
+      - name: Test
+        run: npm test

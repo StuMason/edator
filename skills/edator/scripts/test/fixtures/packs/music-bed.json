@@ -1,0 +1,9 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 } },
+  "output": {
+    "filename": "bed.mp4", "width": 1280, "height": 720, "fps": 30,
+    "music": { "file": "../media/music.mp3", "volume": 0.12 }
+  },
+  "timeline": [ { "source": "cam", "start": 0.0, "end": 16.0 } ]
+}

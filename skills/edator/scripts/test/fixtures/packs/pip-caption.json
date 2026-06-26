@@ -1,0 +1,15 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 }, "screen": { "file": "../media/screen.mp4", "fps": 30 } },
+  "audio": "screen",
+  "output": { "filename": "pip.mp4", "width": 1280, "height": 720, "fps": 30 },
+  "timeline": [
+    { "source": "screen", "start": 0.0, "end": 12.0,
+      "pip": { "source": "cam", "corner": "br", "width": 0.26, "margin": 0.02 },
+      "captions": [
+        { "text": "read-only API", "style": "label", "start": 2.0, "end": 6.0 },
+        { "text": "he wrote this at 2am. it shows.", "style": "editor", "start": 7.0, "end": 10.0 },
+        { "text": "plain note", "style": "plain", "start": 10.5, "end": 11.5 }
+      ] }
+  ]
+}

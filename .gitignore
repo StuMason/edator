@@ -19,6 +19,10 @@ analysis/
 *.wav
 *.m4a
 
+# …but the test fixtures are committed placeholders (empty files the dry-run
+# renderer only stats, never reads) — keep them tracked despite the rules above.
+!skills/edator/scripts/test/fixtures/media/*
+
 # transcripts / generated analysis
 *.transcript.json
 

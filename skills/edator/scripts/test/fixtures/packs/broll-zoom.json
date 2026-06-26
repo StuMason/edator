@@ -1,0 +1,12 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 }, "diagram": { "file": "../media/card.png", "image": true } },
+  "audio": "cam",
+  "output": { "filename": "broll.mp4", "width": 1280, "height": 720, "fps": 30 },
+  "timeline": [
+    { "source": "cam", "start": 0.0, "end": 5.0, "zoom": 1.14 },
+    { "source": "diagram", "start": 5.0, "end": 14.0,
+      "pip": { "source": "cam", "corner": "tr", "width": 0.24, "margin": 0.03 } },
+    { "source": "cam", "start": 14.0, "end": 18.0, "zoom": { "scale": 1.2, "x": 0.3, "y": 0.4 } }
+  ]
+}

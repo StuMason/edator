@@ -1,0 +1,10 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 } },
+  "output": {
+    "filename": "bookend.mp4", "width": 1280, "height": 720, "fps": 30,
+    "audioFilter": "volume=7dB,alimiter=limit=0.95",
+    "music": { "file": "../media/music.mp3", "introLen": 6, "outroLen": 8 }
+  },
+  "timeline": [ { "source": "cam", "start": 0.0, "end": 20.0 } ]
+}

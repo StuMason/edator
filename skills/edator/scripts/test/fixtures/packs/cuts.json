@@ -1,0 +1,9 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 } },
+  "output": { "filename": "cuts.mp4", "width": 1280, "height": 720, "fps": 30 },
+  "timeline": [
+    { "source": "cam", "start": 2.0, "end": 9.5 },
+    { "source": "cam", "start": 14.0, "end": 21.0 }
+  ]
+}
