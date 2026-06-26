@@ -23,7 +23,10 @@
     { "source": "cam", "start": 3.5, "end": 18.0, "reason": "Intro, trimmed the throat-clear off the top.",
       "captions": [ { "text": "what we built", "style": "label", "start": 5.0, "end": 9.0 } ] },
 
-    { "source": "cam", "start": 24.0, "end": 33.0, "zoom": 1.14, "reason": "Cut a fumbled retake (18-24); punch in on the key claim." },
+    { "source": "cam", "start": 24.0, "end": 33.0, "zoom": 1.14, "chapter": "The key claim", "reason": "Cut a fumbled retake (18-24); punch in on the key claim." },
+
+    { "source": "screen", "start": 60.0, "end": 80.0, "speed": 3.0, "reason": "Timelapse the dependency install — 20s of waiting becomes ~7s.",
+      "captions": [ { "text": "3× — nobody needs to watch npm install", "style": "editor", "start": 61.0, "end": 65.0 } ] },
 
     { "source": "diagram", "start": 33.0, "end": 44.0, "reason": "Hold the architecture diagram while he explains it; keep him in the corner.",
       "transition": "dip",

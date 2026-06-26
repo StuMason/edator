@@ -102,6 +102,14 @@ red flag, not a clean cut.
   don't add it. Reach for `transition:"dip"` only when you want a cut to *feel*
   like a deliberate beat (chapter break, topic change), not on every join. xfade
   isn't built yet — "dip" or a hard cut are your two options.
+- **Speed-ramp the dead time.** A long wait (install, build, scaffold) is a
+  `speed` segment, not a cut — `"speed": 3.0` keeps continuity where a hard cut
+  would feel like a jump. A/V stays locked; caption it so the viewer's in on it.
+- **`zoom:"push"` gives a static frame life.** A held still or a long talking-head
+  beat earns a slow push (Ken Burns). Don't push everything — it's for the beat
+  that wants to breathe, same as a punch-in is for the claim that wants emphasis.
+- **`chapter` the structural beats.** A title on the first segment of each section
+  gives YouTube chapters for free. Put one on segment 0 so the first marker is 0:00.
 - **Raw filters are the last resort, and they belong IN the pack.** If the typed
   vocabulary can't say it, use `rawFilter` (segment) or `output.rawVideoFilter`/
   `rawAudioFilter` — never hand-run ffmpeg outside the pack (that breaks "same

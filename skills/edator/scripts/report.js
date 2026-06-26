@@ -42,7 +42,7 @@ const TH_TARGET = 0.6;  // talking-head above this earns a warning
 function analyse(pack) {
   const segs = pack.timeline;
   const out = pack.output || {};
-  const dur = (s) => s.end - s.start;
+  const dur = (s) => (s.end - s.start) / (s.speed || 1);   // OUTPUT seconds (speed-aware)
   const isImage = (k) => !!pack.sources[k]?.image;
 
   const durations = segs.map(dur);
@@ -64,6 +64,8 @@ function analyse(pack) {
     zoom: segs.filter((s) => s.zoom).length,
     image: segs.filter((s) => isImage(s.source)).length,
     speed: segs.filter((s) => s.speed != null).length,
+    push: segs.filter((s) => s.zoom === "push" || (s.zoom && typeof s.zoom === "object" && (s.zoom.from != null || s.zoom.to != null))).length,
+    chapter: segs.filter((s) => s.chapter).length,
     transition: segs.filter((s) => s.transition).length,
     capEditor: segs.reduce((n, s) => n + (s.captions || []).filter((c) => c.style === "editor").length, 0),
     capLabel: segs.reduce((n, s) => n + (s.captions || []).filter((c) => c.style === "label").length, 0),
@@ -93,7 +95,7 @@ function analyse(pack) {
   const audioWarm = /alimiter/i.test(af) && !audioBad;
 
   // distinct kinds of move actually used (for a variety read)
-  const moveKinds = ["rollSwitch", "pip", "zoom", "image", "speed", "transition", "capEditor", "capLabel", "music"]
+  const moveKinds = ["rollSwitch", "pip", "zoom", "push", "image", "speed", "chapter", "transition", "capEditor", "capLabel", "music"]
     .filter((k) => moves[k] > 0).length;
 
   return { total, count: segs.length, durations, median, thTime, thPct: total ? thTime / total : 0,
@@ -145,10 +147,12 @@ function scorecard(pack, m, validation) {
   // CEILING
   const ambitious = [];
   if (mv.pip) ambitious.push(`${mv.pip} PiP`);
-  if (mv.zoom) ambitious.push(`${mv.zoom} punch-in`);
+  if (mv.zoom - mv.push > 0) ambitious.push(`${mv.zoom - mv.push} punch-in`);   // static crops
+  if (mv.push) ambitious.push(`${mv.push} push`);
   if (mv.capEditor) ambitious.push(`${mv.capEditor} EdAtor aside`);
   if (mv.image) ambitious.push(`${mv.image} B-roll card`);
   if (mv.speed) ambitious.push(`${mv.speed} speed-ramp`);
+  if (mv.chapter) ambitious.push(`${mv.chapter} chapters`);
   if (mv.transition) ambitious.push(`${mv.transition} transition`);
   L.push(`CEILING      attempted: ${ambitious.length ? ambitious.join(", ") : "nothing beyond cuts"} ` +
     `— did they land? eyeball the contact sheet.`);
