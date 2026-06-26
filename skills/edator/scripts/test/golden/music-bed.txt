@@ -1,0 +1,1 @@
+[0:v]trim=start=0:end=16,setpts=PTS-STARTPTS,scale=1280:720:force_original_aspect_ratio=decrease,pad=1280:720:(ow-iw)/2:(oh-ih)/2,fps=30,setsar=1[v0];[0:a]atrim=start=0:end=16,asetpts=PTS-STARTPTS[a0];[v0][a0]concat=n=1:v=1:a=1[outv][outa];[1:a]volume=0.12,afade=t=in:d=1.2,afade=t=out:st=13.50:d=2.5[bed];[outa][bed]amix=inputs=2:duration=first:normalize=0[outmix]

@@ -1,0 +1,11 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 }, "screen": { "file": "../media/screen.mp4", "fps": 30 } },
+  "audio": "screen",
+  "output": { "filename": "multiroll.mp4", "width": 1280, "height": 720, "fps": 30, "audioFilter": "volume=7dB,alimiter=limit=0.95" },
+  "timeline": [
+    { "source": "cam", "start": 0.0, "end": 6.0 },
+    { "source": "screen", "start": 6.0, "end": 15.0 },
+    { "source": "cam", "start": 15.0, "end": 19.0 }
+  ]
+}
