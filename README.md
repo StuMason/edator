@@ -107,6 +107,7 @@ Driven entirely by the pack (full spec:
 - **Picture-in-picture** — drop a roll into a corner (e.g. the camera over a diagram).
 - **Image B-roll** — hold a still (diagram / card) full-frame while narration continues.
 - **Captions** — three styles: an EdAtor chat-bubble aside, a production eyebrow label, or a plain caption.
+- **Bleeps** — `bleeps` on a segment censors a word: the speech is muted across the window and a gentle 1kHz tone drops in its place. Source-timed like captions, projected under `speed`.
 - **Music** — a quiet continuous bed, or a faded intro/outro bookend.
 - **Warm audio** — a gentle, transparent polish (and a strong opinion about *not* over-processing a good mic).
 - **Escape valve** — `rawFilter` (per segment) and `output.rawVideoFilter`/`rawAudioFilter` (global): raw ffmpeg, but *inside* the pack, so it still round-trips.
