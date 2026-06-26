@@ -1,0 +1,30 @@
+name: Bug Report
+description: A pack that renders wrong, a script that errors, a filter ffmpeg rejects
+labels: ['bug']
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did the renderer / preflight / validate do that it shouldn't?
+    validations:
+      required: true
+  - type: textarea
+    id: pack
+    attributes:
+      label: The edit pack (or a minimal repro)
+      description: Paste the smallest pack that reproduces it. Source media can be dummy files for a `--dry-run`.
+      render: json
+  - type: textarea
+    id: command
+    attributes:
+      label: Command + output
+      description: The exact command and the error (a `--dry-run` filter_complex is gold).
+      render: shell
+  - type: input
+    id: env
+    attributes:
+      label: Environment
+      placeholder: 'macOS 14 · node 22.5 · ffmpeg 7.0'
+    validations:
+      required: true

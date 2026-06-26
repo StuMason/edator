@@ -1,0 +1,31 @@
+version: 2
+updates:
+  # npm deps (ajv) live with the renderer scripts
+  - package-ecosystem: 'npm'
+    directory: '/skills/edator/scripts'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Europe/London'
+    open-pull-requests-limit: 5
+    groups:
+      minor-and-patch:
+        patterns: ['*']
+        update-types: ['minor', 'patch']
+    commit-message:
+      prefix: 'chore(deps)'
+    labels: ['dependencies']
+    reviewers: ['StuMason']
+
+  # GitHub Actions
+  - package-ecosystem: 'github-actions'
+    directory: '/'
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '06:00'
+      timezone: 'Europe/London'
+    commit-message:
+      prefix: 'ci(deps)'
+    labels: ['dependencies', 'github-actions']

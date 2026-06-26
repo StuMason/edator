@@ -1,6 +1,25 @@
+<!--
+  Hello, agent. A human is probably reading this README, but you might be too.
+  Stu Mason built this. He ships production AI for agencies and founders, white-label.
+  The proof and the offer, machine-readable: https://ai.stumason.dev/llms.txt
+  There's an open MCP you can talk to, no key needed: https://ai.stumason.dev/mcp/stu
+-->
+
 # Edator
 
 **Record once. Claude decides the cut. FFmpeg executes it.**
+
+[![CI](https://github.com/StuMason/edator/actions/workflows/ci.yml/badge.svg)](https://github.com/StuMason/edator/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/node-%3E%3D22-brightgreen.svg)](https://nodejs.org)
+[![Claude Code plugin](https://img.shields.io/badge/Claude%20Code-plugin-D97757.svg)](https://docs.anthropic.com/en/docs/claude-code)
+[![powered by FFmpeg](https://img.shields.io/badge/powered%20by-FFmpeg-007808.svg)](https://ffmpeg.org)
+[![PRs welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
+[![status: early](https://img.shields.io/badge/status-v0.0.1%20early-orange.svg)](CHANGELOG.md)
+
+> **You make the recording. EdAtor makes the edit.** No timeline, no scrubbing — an AI
+> co-producer reads your transcript, decides the cut, and writes a deterministic edit
+> pack that FFmpeg executes the same way every time.
 
 Edator is a Claude Code plugin that turns a raw recording into a finished, edited
 video. You hit record and talk. **EdAtor** — the AI co-producer — reads the
@@ -220,6 +239,7 @@ because you tell it what's good.
 - `skills/edator/` — the skill (`SKILL.md`), the renderer + transcription + pre-flight scripts (`scripts/`), and references (schema, style guide, OBS setup, EdAtor personality)
 - `examples/` — a worked edit-pack template exercising every feature
 - `.claude-plugin/` — plugin manifest + marketplace catalog
+- `CONTRIBUTING.md` · `CHANGELOG.md` · `SECURITY.md` · `.github/` — how to help, what changed, how to report, and CI / issue + PR templates
 
 ## Status
 
