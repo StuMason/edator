@@ -1,0 +1,14 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 } },
+  "output": {
+    "filename": "raw.mp4", "width": 1280, "height": 720, "fps": 30,
+    "audioFilter": "volume=7dB,alimiter=limit=0.95",
+    "rawVideoFilter": "hue=s=0",
+    "rawAudioFilter": "aecho=0.8:0.9:40:0.4"
+  },
+  "timeline": [
+    { "source": "cam", "start": 0, "end": 6, "transition": "dip", "rawFilter": "rgbashift=rh=4:bh=-4" },
+    { "source": "cam", "start": 6, "end": 12 }
+  ]
+}

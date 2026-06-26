@@ -64,6 +64,14 @@
           "default": true,
           "description": "Whether to apply an automatic ~5ms audio fade at every segment boundary so hard cuts don't click/pop on non-onset joins. On by default — this is hygiene, not a creative choice. Set false only to debug a raw splice."
         },
+        "rawVideoFilter": {
+          "type": "string",
+          "description": "ESCAPE VALVE — opaque ffmpeg filter applied to the WHOLE concatenated picture, after all segments are joined. Unvalidated by design (you're on your own; a bad string fails at ffmpeg). Frames in → frames out, no label refs. Still deterministic because it lives in the pack. Prefer a typed field; if you keep reaching for the same thing here, that's a feature request."
+        },
+        "rawAudioFilter": {
+          "type": "string",
+          "description": "ESCAPE VALVE — opaque ffmpeg filter applied to the concatenated spoken mix, AFTER audioFilter (WARM) and BEFORE any music. Unvalidated by design. Audio in → audio out, no label refs. Deterministic because it's in the pack. Don't use it to reinvent loudnorm — the WARM default is deliberate."
+        },
         "music": {
           "type": "object",
           "description": "Optional music. Two modes: bookend (set introLen/outroLen) plays over the open + close only, faded, at moderate volume; bed (omit both) is a quiet continuous track under the whole thing. NOTE: house preference is currently NO music — only add when explicitly wanted.",
@@ -107,6 +115,7 @@
             ]
           },
           "audio": { "type": "string", "description": "Per-segment audio override (a source key). Wins over the global `audio` bed — e.g. an ident's own track, or to let one segment carry its own sound." },
+          "rawFilter": { "type": "string", "description": "ESCAPE VALVE — opaque ffmpeg filter spliced in as the LAST transform on this segment's finished frame (after scale/zoom/pip/captions/transition). Unvalidated by design; frames in → frames out, no label refs. Deterministic because it's in the pack. Reach for a typed field (zoom/pip/transition) first — raw is for the thing the vocabulary can't say yet." },
           "zoom": {
             "description": "Punch-in emphasis. Either a number (uniform scale, e.g. 1.14) or an object. Focus defaults favour the face (y high).",
             "oneOf": [

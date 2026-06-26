@@ -275,11 +275,15 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
   // out to black at its tail (stamped when a neighbour requests a dip). It's a
   // trailing fade on the finished frame, so the concat spine is untouched.
   const segDur = +(seg.end - seg.start).toFixed(3);
-  const vfades = [];
-  if (seg._dipIn) vfades.push(`fade=t=in:st=0:d=${seg._dipIn}`);
-  if (seg._dipOut) vfades.push(`fade=t=out:st=${(segDur - seg._dipOut).toFixed(3)}:d=${seg._dipOut}`);
-  // Where the composited frame lands before the optional fade pass.
-  const vTerm = vfades.length ? `[vpre${i}]` : `[v${i}]`;
+  const tail = [];
+  if (seg._dipIn) tail.push(`fade=t=in:st=0:d=${seg._dipIn}`);
+  if (seg._dipOut) tail.push(`fade=t=out:st=${(segDur - seg._dipOut).toFixed(3)}:d=${seg._dipOut}`);
+  // Escape valve: an opaque, unvalidated filter string, spliced in as the LAST
+  // transform on this segment's finished frame (after scale/zoom/pip/captions/
+  // transition). Frames in → frames out, no label refs. See issue #2.
+  if (seg.rawFilter) tail.push(seg.rawFilter);
+  // Where the composited frame lands before the optional trailing transforms.
+  const vTerm = tail.length ? `[vpre${i}]` : `[v${i}]`;
 
   if (seg.pip) {
     const pIdx = idxOf(seg.pip.source, `Segment ${i} pip`);
@@ -295,7 +299,7 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     const baseStr = base.join(",");
     parts.push(capChain ? `${baseStr},${capChain}${vTerm}` : `${baseStr}${vTerm}`);
   }
-  if (vfades.length) parts.push(`${vTerm}${vfades.join(",")}[v${i}]`);
+  if (tail.length) parts.push(`${vTerm}${tail.join(",")}[v${i}]`);
 }
 
 // Audio chain for one segment, ending at label [aN]. Source precedence:
@@ -388,16 +392,22 @@ function buildGraph(pack, plan) {
   const n = pack.timeline.length;
   parts.push(`${concatLabels.join("")}concat=n=${n}:v=1:a=1[outv][outa]`);
 
+  // Global video escape valve: opaque filter on the whole concatenated picture.
+  let vMap = "[outv]";
+  if (out.rawVideoFilter) { parts.push(`[outv]${out.rawVideoFilter}[outvf]`); vMap = "[outvf]"; }
+
   // Audio polish (e.g. WARM = volume=7dB,alimiter), applied before music.
   let aMap = "[outa]";
-  if (out.audioFilter) { parts.push(`[outa]${out.audioFilter}[outaf]`); aMap = "[outaf]"; }
+  if (out.audioFilter) { parts.push(`${aMap}${out.audioFilter}[outaf]`); aMap = "[outaf]"; }
+  // Global audio escape valve: opaque filter on the spoken mix, before music.
+  if (out.rawAudioFilter) { parts.push(`${aMap}${out.rawAudioFilter}[outraf]`); aMap = "[outraf]"; }
 
   if (out.music) {
     const totalDur = pack.timeline.reduce((s, sg) => s + (sg.end - sg.start), 0);
     aMap = buildMusicTail(out.music, plan.musicIdx, plan.bookend, totalDur, aMap, parts);
   }
 
-  return { filterComplex: parts.join(";"), aMap, segments: n, audioKey, multiRoll: rolls.size > 1 };
+  return { filterComplex: parts.join(";"), vMap, aMap, segments: n, audioKey, multiRoll: rolls.size > 1 };
 }
 
 // ---------------------------------------------------------------------------
@@ -412,12 +422,25 @@ function ffmpegArgs(plan, graph, outPath) {
   }
   args.push(
     "-filter_complex", graph.filterComplex,
-    "-map", "[outv]", "-map", graph.aMap,
+    "-map", graph.vMap, "-map", graph.aMap,
     "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
     "-c:a", "aac", "-b:a", "192k",
     "-movflags", "+faststart", "-y", outPath,
   );
   return args;
+}
+
+// Surface raw-valve usage on stderr: which fields, how many. Past this line the
+// typed vocabulary couldn't express the edit — that's the promote signal.
+function warnRawValve(pack) {
+  const used = [];
+  const segs = (pack.timeline || []).filter((s) => s.rawFilter).length;
+  if (segs) used.push(`${segs} segment rawFilter${segs > 1 ? "s" : ""}`);
+  if (pack.output?.rawVideoFilter) used.push("output.rawVideoFilter");
+  if (pack.output?.rawAudioFilter) used.push("output.rawAudioFilter");
+  if (used.length) {
+    console.error(`⚠ raw filter valve in use (${used.join(", ")}) — past the typed vocabulary, unvalidated. Reproducible because it's in the pack; promote it to a real field if it recurs.`);
+  }
 }
 
 async function main() {
@@ -436,6 +459,11 @@ async function main() {
   // Refuse to render an invalid pack — fail fast with located errors.
   const { errors } = await validatePack(pack);
   if (errors.length) die(`Edit pack failed validation:\n  • ${errors.join("\n  • ")}`);
+
+  // The raw valve is ungated — determinism comes from the string living IN the
+  // pack, not from a CLI flag — but loud, so an accidental raw string is a
+  // conscious choice and the funnel (issue #2) is visible.
+  warnRawValve(pack);
 
   const plan = planInputs(pack, dirname(packPath));
   const graph = buildGraph(pack, plan);
