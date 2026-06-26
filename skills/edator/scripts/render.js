@@ -237,21 +237,22 @@ function planInputs(pack, packDir) {
 // Build the filter graph
 // ---------------------------------------------------------------------------
 
-// Animated push: scale up to the `to` size, then crop a window that shrinks over
-// time (variable t) so apparent zoom ramps from `from` to `to`, then scale back
-// to canvas. Deterministic (a plain expression, no per-frame accumulator) — and
-// snapshot-stable, unlike zoompan. dur is the segment's OUTPUT duration.
-function pushFilters(z, W, H, dur) {
+// Animated push (Ken Burns): ramp the apparent zoom from `from` to `to` across
+// the segment. crop CAN'T do this — its w/h are evaluated once at init, not per
+// frame — so zoompan is the right tool: it recomputes the view every output
+// frame. z grows linearly with the output-frame index `on`; x/y keep the focus
+// point fixed as it zooms; d=1 emits one output frame per input frame (it's
+// video, not a held still). dur is the segment's OUTPUT duration, fps its rate.
+function pushFilters(z, W, H, dur, fps) {
   const from = z.from != null ? z.from : 1.0;
   const to = z.to != null ? z.to : 1.15;
   const fx = z.x != null ? z.x : 0.5;
   const fy = z.y != null ? z.y : 0.34;
-  const Wto = even(W * to), Hto = even(H * to);
-  const zt = `(${from}+(${to}-${from})*t/${dur.toFixed(3)})`;   // apparent zoom at time t
+  const f = Number.isInteger(fps) ? fps : 30;
+  const N = Math.max(1, Math.round(dur * f));   // output frames over the segment
+  const zexpr = `${from}+(${to}-${from})*on/${N}`;
   return [
-    `scale=${Wto}:${Hto}`,
-    `crop=w='${W}*${to}/${zt}':h='${H}*${to}/${zt}':x='(in_w-out_w)*${fx}':y='(in_h-out_h)*${fy}'`,
-    `scale=${W}:${H}`,
+    `zoompan=z='${zexpr}':x='(iw-iw/zoom)*${fx}':y='(ih-ih/zoom)*${fy}':d=1:s=${W}x${H}:fps=${f}`,
   ];
 }
 
@@ -273,7 +274,7 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
   if (seg._isImage) {
     // Held still: fit to canvas, no trim (the input is already looped to length).
     base.push(`[${seg._vIdx}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
-    if (seg.zoom && isPush(seg.zoom)) base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg)));   // Ken Burns on a still
+    if (seg.zoom && isPush(seg.zoom)) base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg), seg._fps));   // Ken Burns on a still
     if (wantFps) base.push(`fps=${seg._fps}`);
     base.push("setsar=1");
   } else {
@@ -281,7 +282,7 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     if (seg.zoom && isPush(seg.zoom) && wantScale) {
       // Animated push: normalise to canvas, then ramp the zoom over the segment.
       base.push(`scale=${W}:${H}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
-      base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg)));
+      base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg), seg._fps));
     } else if (seg.zoom && wantScale) {
       // Static punch-in: scale up then crop back to canvas. zoom = number, or
       // {scale,x,y} where x/y are focus points 0..1 (y defaults high for the face).

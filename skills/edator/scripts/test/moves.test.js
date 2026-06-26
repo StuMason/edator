@@ -51,22 +51,23 @@ test("speed compresses the segment's output duration (fade-out lands at the real
 
 // --- animated zoom (push) ------------------------------------------------
 
-test('zoom:"push" produces an animated crop (time-varying), not a static one', () => {
+test('zoom:"push" produces an animated zoompan (ramps with the output frame), not a static crop', () => {
+  // 6s @ 30fps = 180 output frames; z ramps 1.0 → 1.15 over `on/180`.
   const g = graph(packFile([{ source: "cam", start: 0, end: 6, zoom: "push" }]));
-  assert.match(g, /crop=w='1280\*1\.15\/\(1\+\(1\.15-1\)\*t\/6/, "crop window ramps with t");
-  assert.doesNotMatch(g, /zoompan/, "uses scale+crop, not zoompan");
+  assert.match(g, /zoompan=z='1\+\(1\.15-1\)\*on\/180'/, "zoom ramps with the output frame index");
+  assert.match(g, /:s=1280x720:fps=30/, "zoompan re-emits at canvas size + fps");
 });
 
 test("animated zoom honours from/to and focus", () => {
   const g = graph(packFile([{ source: "cam", start: 0, end: 6, zoom: { from: 1.0, to: 1.3, x: 0.3, y: 0.5 } }]));
-  assert.match(g, /scale=1664:936/, "scales up to the `to` size");
-  assert.match(g, /x='\(in_w-out_w\)\*0\.3':y='\(in_h-out_h\)\*0\.5'/, "focus point is used");
+  assert.match(g, /zoompan=z='1\+\(1\.3-1\)\*on\/180'/, "ramps from `from` to `to`");
+  assert.match(g, /x='\(iw-iw\/zoom\)\*0\.3':y='\(ih-ih\/zoom\)\*0\.5'/, "focus point is used");
 });
 
 test("a static zoom number is still a fixed crop (unchanged behaviour)", () => {
   const g = graph(packFile([{ source: "cam", start: 0, end: 6, zoom: 1.2 }]));
   assert.match(g, /scale=1536:864,crop=1280:720/, "static path unchanged");
-  assert.doesNotMatch(g, /\*t\//, "no time variable in a static zoom");
+  assert.doesNotMatch(g, /zoompan/, "a static zoom never uses zoompan");
 });
 
 // --- chapters ------------------------------------------------------------
