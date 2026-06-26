@@ -27,6 +27,15 @@ write a pack — every field there is executed; nothing is reserved.
 
 ## The process
 
+0. **Pre-flight the raw — before anything else.** `node scripts/preflight.js raw1.mp4 raw2.mp4`.
+   Never cut footage you haven't QC'd. It reports, per file, freeze/black windows
+   (a frozen *silent* roll = camera death — route around it, the pixels aren't
+   there), variable frame rate (breaks frame-accurate cutting), source clipping,
+   and a **typed dead-air map**: *leading/trailing* silence → always trim to the
+   real onset; a *long gap* → cut it or `speed`-ramp it; *pause/breath* → usually
+   keep. Once you have a draft pack, `--pack <pack.json>` projects those landmines
+   onto the actual segments. This is where the floor gets raised: you fix bad
+   footage at the source instead of discovering it in the cut.
 1. **Transcribe.** `node scripts/transcribe.js <recording.mp4>` → word-level JSON
    (AssemblyAI Universal-3 Pro, disfluencies on — every "um"/false-start
    timestamped). Only the audio leaves the machine. Needs `ASSEMBLYAI_API_KEY`.

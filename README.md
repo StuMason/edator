@@ -136,6 +136,28 @@ schema) turn on once you install [ajv](https://ajv.js.org/):
 cd skills/edator/scripts && npm install   # optional: enables strict schema checks + npm test
 ```
 
+### Pre-flight the footage (before you cut)
+
+`report.js` scores the *output*; `preflight.js` is its mirror — it scores the
+*input*, so you never build a cut on top of footage that's frozen, silent,
+clipped or variable-frame-rate. Run it on the raw before writing a pack.
+
+```bash
+node skills/edator/scripts/preflight.js raw-screen.mp4 raw-camera.mp4   # per-file health
+node skills/edator/scripts/preflight.js --pack mypack.json              # + landmines projected onto the cut
+node skills/edator/scripts/preflight.js --pack mypack.json --json       # machine-readable for the editor
+```
+
+Two tiers of rule:
+
+- **Macro** (per file) — opens / duration, resolution, **constant vs variable frame rate**, audio presence, a **whole-file freeze/black scan** (the camera-death detector), and source loudness/clipping.
+- **Micro** (time-resolved) — a **typed dead-air map** (leading / trailing → trim; long gap → cut or speed-ramp; pause; breath → keep) and freeze/black windows, **projected onto the timeline** so each landmine names the exact segments that land in it.
+
+It uses one tell from the two-roll setup: the camera roll is silent (the mic is on
+the screen roll), so a *silent* roll that freezes is camera death, while a *voiced*
+roll holding still is just a slide — no false alarm. It's how "is this footage even
+usable?" gets answered before any editing, not after.
+
 ### Score a pack (the feedback signal)
 
 `record → pack → render` has no closing signal — so the editor is cutting blind.
