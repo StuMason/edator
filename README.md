@@ -195,6 +195,13 @@ look like an idiot, never flag a genuine mistake on camera, and dials the cheek
 right down on anything that has to sell. (Yes, it's spelled EdAtor. No, you won't
 say it right the first time. It's fine. You'll get there.)
 
+The full character — the beats that land, the hard limits, and **how to tune EdAtor
+to you through feedback** — is in
+[`skills/edator/references/personality.md`](skills/edator/references/personality.md).
+The default is strong; the reason a cut ends up feeling *exactly* right is the loop:
+you react in your own words, EdAtor logs what lands, and it converges. It gets better
+because you tell it what's good.
+
 ## Requirements
 
 - Claude Code (with skill/plugin support)
@@ -210,7 +217,7 @@ say it right the first time. It's fine. You'll get there.)
 
 ## What's in this repo
 
-- `skills/edator/` — the skill (`SKILL.md`), the renderer + transcription scripts (`scripts/`), and references (schema, style guide, OBS setup)
+- `skills/edator/` — the skill (`SKILL.md`), the renderer + transcription + pre-flight scripts (`scripts/`), and references (schema, style guide, OBS setup, EdAtor personality)
 - `examples/` — a worked edit-pack template exercising every feature
 - `.claude-plugin/` — plugin manifest + marketplace catalog
 
