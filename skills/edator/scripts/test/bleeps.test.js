@@ -37,7 +37,7 @@ test("a bleep mutes the word and drops a 1kHz tone in its place", () => {
   // a 1kHz sine, delayed onto the word, mixed back over the muted speech
   assert.match(g, /sine=frequency=1000/, "generates a 1kHz tone");
   assert.match(g, /adelay=2000\|2000/, "delays the tone to land on the word");
-  assert.match(g, /,volume=1\[bz/, "tone sits at speech level, not a klaxon");
+  assert.match(g, /,volume=0\.5\[bz/, "tone sits just below speech level — a casual bleep, not a klaxon");
   assert.match(g, /amix=inputs=2:duration=first:normalize=0/, "mixes tone over the muted speech without re-levelling");
 });
 
