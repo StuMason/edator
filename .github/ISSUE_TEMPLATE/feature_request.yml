@@ -1,0 +1,23 @@
+name: Feature Request
+description: A new timeline move, a smarter editorial rule, a renderer capability
+labels: ['enhancement']
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem or motivation
+      description: What can't the edit pack express today? What edit are you stuck hand-rolling?
+    validations:
+      required: true
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed solution
+      description: A new typed field? A scalar-or-object shorthand? Sketch the pack syntax.
+    validations:
+      required: true
+  - type: textarea
+    id: raw
+    attributes:
+      label: Are you already doing it with rawFilter?
+      description: If so, paste it — recurring rawFilter usage is exactly the signal to promote a field.
