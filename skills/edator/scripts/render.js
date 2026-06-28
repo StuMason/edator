@@ -24,7 +24,7 @@
  *   - zoom         punch-in: `zoom` number or {scale,x,y} (focus 0..1)
  *   - pip          `pip:{source,corner,width,margin}` overlays a roll in a corner
  *   - image B-roll a source with `image:true` is held as a still for the segment
- *   - captions     `captions:[{style,text,start,end}]` — editor / label / plain
+ *   - captions     `captions:[{text,start,end}]` — neutral burned-in "plain" captions
  *   - music        `output.music` — bookend (introLen/outroLen) or continuous bed
  *   - audio polish `output.audioFilter` applied to the spoken mix before music
  *
@@ -38,26 +38,20 @@ import { dirname, resolve, isAbsolute, join } from "node:path";
 import { tmpdir, platform } from "node:os";
 import { fileURLToPath } from "node:url";
 import { validatePack } from "./validate.js";
-import { segOutDur } from "./timeline.js";
+import { segOutDur, segAudioKey } from "./timeline.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const die = (m) => { console.error(`✗ ${m}`); process.exit(1); };
 const even = (n) => Math.max(2, Math.round(n / 2) * 2);   // h264 needs even dimensions
 
 // Fonts. drawtext needs a real TTF/OTF path, which differs per OS. Resolve a
-// bold sans (headings / EdAtor bubbles) and a mono (eyebrow labels) from
-// per-platform candidates, first match wins. Override either with EDATOR_FONT /
-// EDATOR_MONO. Captions are the only thing that needs a font, so resolution is
-// lazy: a pack with no captions renders even where no font is found.
+// bold sans for plain captions from per-platform candidates, first match wins.
+// Override with EDATOR_FONT. Captions are the only thing that needs a font, so
+// resolution is lazy: a pack with no captions renders even where no font is found.
 const FONT_CANDIDATES = {
   darwin: ["/System/Library/Fonts/Supplemental/Arial Bold.ttf", "/Library/Fonts/Arial Bold.ttf", "/System/Library/Fonts/Helvetica.ttc"],
   linux: ["/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", "/usr/share/fonts/truetype/liberation/LiberationSans-Bold.ttf", "/usr/share/fonts/TTF/DejaVuSans-Bold.ttf", "/usr/share/fonts/dejavu/DejaVuSans-Bold.ttf"],
   win32: ["C:\\Windows\\Fonts\\arialbd.ttf", "C:\\Windows\\Fonts\\arial.ttf"],
-};
-const MONO_CANDIDATES = {
-  darwin: ["/System/Library/Fonts/Menlo.ttc", "/System/Library/Fonts/Monaco.ttf", "/System/Library/Fonts/SFNSMono.ttf"],
-  linux: ["/usr/share/fonts/truetype/dejavu/DejaVuSansMono.ttf", "/usr/share/fonts/truetype/liberation/LiberationMono-Regular.ttf", "/usr/share/fonts/TTF/DejaVuSansMono.ttf", "/usr/share/fonts/dejavu/DejaVuSansMono.ttf"],
-  win32: ["C:\\Windows\\Fonts\\consola.ttf", "C:\\Windows\\Fonts\\cour.ttf"],
 };
 function resolveFont(envVar, candidatesByOs) {
   if (process.env[envVar]) return process.env[envVar];   // trust the override; validated lazily
@@ -65,14 +59,22 @@ function resolveFont(envVar, candidatesByOs) {
   return null; // nothing found — only fatal if a caption actually needs it (see needFont)
 }
 const FONT = resolveFont("EDATOR_FONT", FONT_CANDIDATES);
-const MONO = resolveFont("EDATOR_MONO", MONO_CANDIDATES);
-const needFont = (which) => {
-  const mono = which === "mono";
-  const f = mono ? MONO : FONT;
-  const envVar = mono ? "EDATOR_MONO" : "EDATOR_FONT";
-  if (!f) die(`No ${mono ? "monospace" : "bold sans"} font found for captions on ${platform()}. Set ${envVar} to a .ttf/.otf file.`);
-  if (!existsSync(f)) die(`${envVar} points at a font that doesn't exist: ${f}`);
-  return f;
+const needFont = () => {
+  if (!FONT) die(`No bold sans font found for captions on ${platform()}. Set EDATOR_FONT to a .ttf/.otf file.`);
+  if (!existsSync(FONT)) die(`EDATOR_FONT points at a font that doesn't exist: ${FONT}`);
+  return FONT;
+};
+
+// Named house grades (POLISH-BACKLOG #6). A `look` locks ONE reproducible grade
+// for a styled beat, instead of hand-tuning per-segment rawFilter that drifts cut
+// to cut. "same pack → same video" applied to colour. Screen-shares stay ungraded
+// by rule — only put a look on a face/cold-open/punch beat. cold-open is the
+// canonical house open grade (a contrast/sat lift + vignette).
+const LOOKS = {
+  "cold-open": "eq=contrast=1.06:saturation=1.06:brightness=0.012,vignette=PI/4.6",
+  "punch": "eq=contrast=1.10:saturation=1.12:brightness=0.010,vignette=PI/5",
+  "noir": "eq=contrast=1.14:saturation=0.55:brightness=-0.005,vignette=PI/4.2",
+  "warm": "eq=contrast=1.04:saturation=1.10:gamma_r=1.03:gamma_b=0.98",
 };
 
 // PiP / overlay corner positions, parameterised by margin (px).
@@ -93,13 +95,10 @@ const capDir = mkdtempSync(join(tmpdir(), "edator-cap-"));
 let capN = 0;
 const writeCap = (txt) => { const f = join(capDir, `c${capN++}.txt`); writeFileSync(f, txt); return f; };
 
-// Build drawtext filter(s) for one caption, timed relative to its segment start.
-//   style "editor" → signed chat bubble in the Anthropic palette: this is clearly
-//     EdAtor's voice (a third party messaging about the speaker), never the
-//     speaker's. Auto-placed in the corner opposite the PiP via `cap.corner`.
-//   style "label"  → stumasondev production eyebrow: orange UPPERCASE mono with a
-//     leading dash on a navy strip. The brand's tell.
-//   anything else  → a plain neutral caption.
+// Build a drawtext filter for one caption, timed relative to its segment start.
+// Only the neutral "plain" caption is drawn here — branded/animated overlays
+// (signed bubbles, eyebrow labels, lower-thirds) are a downstream-compositor
+// concern, deliberately kept out of this generic renderer.
 function drawtext(cap, segStart, Wpx, Hpx, speed = 1) {
   const H = Hpx || 720;
   // Captions are authored in source-time; a sped-up segment compresses the
@@ -108,42 +107,7 @@ function drawtext(cap, segStart, Wpx, Hpx, speed = 1) {
   const b = ((cap.end - segStart) / speed).toFixed(3);
   const en = `enable=between(t\\,${a}\\,${b})`;
 
-  if (cap.style === "editor") {
-    const CREAM = "0xF0EEE6", INK = "0x141413", CORAL = "0xD97757";
-    const cf = Math.round(H * 0.046);     // message font
-    const nf = Math.round(H * 0.030);     // sender-tag font
-    const bb = Math.round(H * 0.020);     // bubble padding
-    const M = Math.round(H * 0.045);      // frame margin
-    const gap = Math.round(H * 0.012);
-    const thC = Math.round(cf * 1.25), thN = Math.round(nf * 1.25);
-    const corner = cap.corner || "br";    // collision-aware corner injected by caller
-    const right = corner.endsWith("r");
-    const top = corner.startsWith("t");
-    const x = right ? `x=w-text_w-${M}` : `x=${M}`;
-    let nameY, bubbleY;
-    if (top) { nameY = M; bubbleY = M + thN + bb + gap; }
-    else { bubbleY = H - M - bb - thC; nameY = bubbleY - bb - gap - thN; }
-    const nameFile = writeCap(cap.by || "EdAtor");
-    const msgFile = writeCap(cap.text);
-    const name = `drawtext=fontfile='${needFont()}':textfile='${nameFile}':fontsize=${nf}:fontcolor=${CREAM}:box=1:boxcolor=${CORAL}@0.95:boxborderw=9:${x}:y=${nameY}:${en}`;
-    const bubble = `drawtext=fontfile='${needFont()}':textfile='${msgFile}':fontsize=${cf}:fontcolor=${INK}:box=1:boxcolor=${CREAM}@0.95:boxborderw=${bb}:${x}:y=${bubbleY}:${en}`;
-    return `${name},${bubble}`;
-  }
-
-  if (cap.style === "label") {
-    const NAVY = "0x0B0E14", ORANGE = "0xFF5436";
-    const fs = Math.round(H * (cap.size || 0.034));
-    const m = Math.round(H * 0.05);
-    const right = (cap.corner || "bl").endsWith("r");
-    const top = (cap.corner || "bl").startsWith("t");
-    const x = right ? `x=w-text_w-${m}` : `x=${m}`;
-    const y = top ? `y=${m}` : `y=h-text_h-${m}`;
-    const msgFile = writeCap(`—  ${String(cap.text).toUpperCase()}`);
-    return `drawtext=fontfile='${needFont("mono")}':textfile='${msgFile}':fontsize=${fs}:fontcolor=${ORANGE}:` +
-      `box=1:boxcolor=${NAVY}@0.82:boxborderw=16:${x}:${y}:${en}`;
-  }
-
-  // plain caption (neutral labels / future subtitles)
+  // plain caption (neutral labels / subtitles)
   const fs = Math.round(H * (cap.size || 0.05));
   const m = Math.round(H * 0.06);
   const pos = {
@@ -243,21 +207,62 @@ function planInputs(pack, packDir) {
 // frame. z grows linearly with the output-frame index `on`; x/y keep the focus
 // point fixed as it zooms; d=1 emits one output frame per input frame (it's
 // video, not a held still). dur is the segment's OUTPUT duration, fps its rate.
-function pushFilters(z, W, H, dur, fps) {
+function pushFilters(z, W, H, dur, fps, motionBlur) {
   const from = z.from != null ? z.from : 1.0;
   const to = z.to != null ? z.to : 1.15;
   const fx = z.x != null ? z.x : 0.5;
   const fy = z.y != null ? z.y : 0.34;
   const f = Number.isInteger(fps) ? fps : 30;
-  const N = Math.max(1, Math.round(dur * f));   // output frames over the segment
+  // Motion blur (POLISH-BACKLOG #11): a fast push at 30fps can strobe/judder.
+  // Render the move at OVER× the frame rate, blend each group of OVER frames
+  // (tmix), then decimate back to f — true synthetic motion blur on the move,
+  // with NO permanent softening of held detail. Off → sub=1, byte-identical path.
+  const sub = motionBlur ? 3 : 1;
+  const fZoom = f * sub;                         // zoompan's internal (oversampled) rate
+  const N = Math.max(1, Math.round(dur * fZoom));   // frames over the segment at that rate
   const zexpr = `${from}+(${to}-${from})*on/${N}`;
-  return [
-    `zoompan=z='${zexpr}':x='(iw-iw/zoom)*${fx}':y='(ih-ih/zoom)*${fy}':d=1:s=${W}x${H}:fps=${f}`,
+  // zoompan rounds the crop window to whole INPUT pixels each frame, so a slow
+  // push moves sub-pixel/frame and visibly "sticks then jumps" (jitter). Cure:
+  // supersample the frame up first, so 1px of rounding is a fraction of an output
+  // pixel. SS=4 makes the shake imperceptible; it only runs on push segments.
+  const SS = 4;
+  // d=sub emits `sub` output frames per INPUT frame, each at its own zoom step, so
+  // oversampling to fZoom preserves the segment's DURATION (d=1 would keep only the
+  // 30 source frames and play 3× fast). tmix then blends each group → motion blur.
+  const out = [
+    `scale=${even(W * SS)}:${even(H * SS)}:flags=bicubic`,
+    `zoompan=z='${zexpr}':x='(iw-iw/zoom)*${fx}':y='(ih-ih/zoom)*${fy}':d=${sub}:s=${W}x${H}:fps=${fZoom}`,
   ];
+  if (motionBlur) out.push(`tmix=frames=${sub}:weights='${Array(sub).fill(1).join(" ")}'`, `fps=${f}`);
+  return out;
 }
 
 // Is this zoom an animated push (push shorthand or from/to) vs a static crop?
 const isPush = (z) => z === "push" || (typeof z === "object" && (z.from != null || z.to != null));
+
+// How a source frame fills the canvas when their aspect ratios differ.
+//   contain (default) — letterbox: fit the whole frame, pad the gaps. Unchanged
+//     legacy behaviour, so every existing pack renders identically.
+//   cover — fill the frame and crop the overflow at a focus point (x,y in 0..1).
+//     This is what vertical (9:16) clips need: a 16:9 roll cover-crops to a
+//     vertical slice, face-centred for cam, the active region for screen.
+// `reframe` is a string ("cover") or {mode,x,y}. Returns the scale/crop|pad
+// filter pair; the caller prefixes the input label to the first entry.
+function fitChain(reframe, W, H) {
+  const mode = typeof reframe === "string" ? reframe : reframe?.mode;
+  if (mode === "cover") {
+    const fx = typeof reframe === "object" && reframe.x != null ? reframe.x : 0.5;
+    const fy = typeof reframe === "object" && reframe.y != null ? reframe.y : 0.5;
+    return [
+      `scale=${W}:${H}:force_original_aspect_ratio=increase`,
+      `crop=${W}:${H}:(iw-${W})*${fx}:(ih-${H})*${fy}`,
+    ];
+  }
+  return [
+    `scale=${W}:${H}:force_original_aspect_ratio=decrease`,
+    `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`,
+  ];
+}
 
 // Video chain for one segment, ending at label [vN] (writes intermediate labels
 // for pip). W/H may be null when the timeline is single-roll and unscaled.
@@ -273,16 +278,17 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
   const base = [];
   if (seg._isImage) {
     // Held still: fit to canvas, no trim (the input is already looped to length).
-    base.push(`[${seg._vIdx}:v]scale=${W}:${H}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
-    if (seg.zoom && isPush(seg.zoom)) base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg), seg._fps));   // Ken Burns on a still
+    const fit = fitChain(seg.reframe, W, H);
+    base.push(`[${seg._vIdx}:v]${fit[0]}`, ...fit.slice(1));
+    if (seg.zoom && isPush(seg.zoom)) base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg), seg._fps, seg.motionBlur));   // Ken Burns on a still
     if (wantFps) base.push(`fps=${seg._fps}`);
     base.push("setsar=1");
   } else {
     base.push(`[${seg._vIdx}:v]trim=start=${seg.start}:end=${seg.end}`, setpts);
     if (seg.zoom && isPush(seg.zoom) && wantScale) {
       // Animated push: normalise to canvas, then ramp the zoom over the segment.
-      base.push(`scale=${W}:${H}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
-      base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg), seg._fps));
+      base.push(...fitChain(seg.reframe, W, H));
+      base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg), seg._fps, seg.motionBlur));
     } else if (seg.zoom && wantScale) {
       // Static punch-in: scale up then crop back to canvas. zoom = number, or
       // {scale,x,y} where x/y are focus points 0..1 (y defaults high for the face).
@@ -292,18 +298,16 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
       const sW = even(W * z), sH = even(H * z);
       base.push(`scale=${sW}:${sH}`, `crop=${W}:${H}:${Math.round((sW - W) * fx)}:${Math.round((sH - H) * fy)}`);
     } else if (wantScale) {
-      base.push(`scale=${W}:${H}:force_original_aspect_ratio=decrease`, `pad=${W}:${H}:(ow-iw)/2:(oh-ih)/2`);
+      base.push(...fitChain(seg.reframe, W, H));
     }
     if (wantFps) base.push(`fps=${seg._fps}`);
     base.push("setsar=1");
   }
 
-  // Captions, timed in source-time like the cut. Editor bubbles auto-dodge the PiP:
-  // cam in a right corner → bubble bottom-left, and vice-versa, so they never overlap.
+  // Captions, timed in source-time like the cut.
   const caps = Array.isArray(seg.captions) ? seg.captions : [];
-  const editorCorner = seg.pip && (seg.pip.corner || "br").endsWith("r") ? "bl" : "br";
   const capChain = caps
-    .map((c) => drawtext(c.style === "editor" && !c.corner ? { ...c, corner: editorCorner } : c, seg.start, W, H, speed))
+    .map((c) => drawtext(c, seg.start, W, H, speed))
     .join(",");
 
   // Dip-to-black transition: fade this segment in from black at its head, and/or
@@ -314,6 +318,9 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
   const tail = [];
   if (seg._dipIn) tail.push(`fade=t=in:st=0:d=${seg._dipIn}`);
   if (seg._dipOut) tail.push(`fade=t=out:st=${(segDur - seg._dipOut).toFixed(3)}:d=${seg._dipOut}`);
+  // House grade (POLISH-BACKLOG #6): a named, locked look applied to this beat's
+  // finished frame. Before rawFilter so a one-off can still layer on top.
+  if (seg.look) tail.push(LOOKS[seg.look] || die(`Segment ${i}: unknown look "${seg.look}" — known: ${Object.keys(LOOKS).join(", ")}`));
   // Escape valve: an opaque, unvalidated filter string, spliced in as the LAST
   // transform on this segment's finished frame (after scale/zoom/pip/captions/
   // transition). Frames in → frames out, no label refs. See issue #2.
@@ -321,7 +328,28 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
   // Where the composited frame lands before the optional trailing transforms.
   const vTerm = tail.length ? `[vpre${i}]` : `[v${i}]`;
 
-  if (seg.pip) {
+  if (seg.split && wantScale && seg.pip) {
+    // 50:50 vertical STACK: the main source (screen) fills a top band at full
+    // width; the pip's roll (the face cam) cover-crops the bottom band. The gap
+    // between them is the near-black "seam" the dressing drops captions into.
+    // Used when a 16:9 screen-share can't be cropped to 9:16 without losing it.
+    const camIdx = idxOf(seg.pip.source, `Segment ${i} split`);
+    const sH = even(W * 9 / 16);                 // screen band height at full width
+    const sY = Math.round(H * 0.09);             // top band offset (below top chrome)
+    const seamH = Math.round(H * 0.085);         // the caption seam
+    const cY = sY + sH + seamH;                  // bottom (face) band offset
+    const cH = even(H - cY - Math.round(H * 0.075));
+    const rf = typeof seg.reframe === "object" ? seg.reframe : {};
+    const fx = rf.x != null ? rf.x : 0.5, fy = rf.y != null ? rf.y : 0.42;
+    const f = seg._fps || 30, dur = segOutDur(seg).toFixed(3);
+    const ovOut = capChain ? `[ov${i}]` : vTerm;
+    parts.push(`[${seg._vIdx}:v]trim=start=${seg.start}:end=${seg.end},${setpts},scale=${W}:${sH},setsar=1[top${i}]`);
+    parts.push(`[${camIdx}:v]trim=start=${seg.start}:end=${seg.end},${setpts},scale=${W}:${cH}:force_original_aspect_ratio=increase,crop=${W}:${cH}:(iw-${W})*${fx}:(ih-${cH})*${fy},setsar=1[bot${i}]`);
+    parts.push(`color=c=0x0a0c10:s=${W}x${H}:r=${f}:d=${dur},setsar=1[cv${i}]`);
+    parts.push(`[cv${i}][top${i}]overlay=0:${sY}:eof_action=repeat[ct${i}]`);
+    parts.push(`[ct${i}][bot${i}]overlay=0:${cY}:eof_action=repeat${wantFps ? `,fps=${seg._fps}` : ""}${ovOut}`);
+    if (capChain) parts.push(`[ov${i}]${capChain}${vTerm}`);
+  } else if (seg.pip) {
     const pIdx = idxOf(seg.pip.source, `Segment ${i} pip`);
     const pw = even((W || 1280) * (seg.pip.width || 0.25));
     const margin = Math.round((W || 1280) * (seg.pip.margin ?? 0.02));
@@ -407,8 +435,19 @@ function buildMusicTail(music, musicIdx, bookend, totalDur, inLabel, parts) {
     parts.push(`${inLabel}[mi][mo]amix=inputs=3:duration=first:normalize=0[outmix]`);
   } else {
     const fadeOut = Math.max(0.1, totalDur - 2.5).toFixed(2);
-    parts.push(`[${musicIdx}:a]volume=${vol},afade=t=in:d=1.2,afade=t=out:st=${fadeOut}:d=2.5[bed]`);
-    parts.push(`${inLabel}[bed]amix=inputs=2:duration=first:normalize=0[outmix]`);
+    if (music.duck) {
+      // Sidechain-duck the bed under speech (POLISH-BACKLOG #10). The instant a
+      // bed meets a talking beat it fights the voice; ducking pulls it ~6-9 dB
+      // while speech is present and swells it back in the gaps. Split the spoken
+      // mix: one copy feeds the final amix, one is the sidechain key.
+      parts.push(`[${musicIdx}:a]volume=${vol},afade=t=in:d=1.2,afade=t=out:st=${fadeOut}:d=2.5[bedpre]`);
+      parts.push(`${inLabel}asplit=2[spmix][spkey]`);
+      parts.push(`[bedpre][spkey]sidechaincompress=threshold=0.03:ratio=8:attack=20:release=300[bed]`);
+      parts.push(`[spmix][bed]amix=inputs=2:duration=first:normalize=0[outmix]`);
+    } else {
+      parts.push(`[${musicIdx}:a]volume=${vol},afade=t=in:d=1.2,afade=t=out:st=${fadeOut}:d=2.5[bed]`);
+      parts.push(`${inLabel}[bed]amix=inputs=2:duration=first:normalize=0[outmix]`);
+    }
   }
   return "[outmix]";
 }
@@ -423,6 +462,71 @@ function parseDip(transition, i) {
   if (type !== "dip") die(`Segment ${i}: unknown transition "${type}" — only "dip" is supported.`);
   const dur = typeof transition === "object" && transition.dur != null ? +transition.dur : 0.12;
   return Math.max(0.04, dur);
+}
+
+// J-cuts & L-cuts — the single most "pro" dialogue move (POLISH-BACKLOG #1).
+//
+// A hard cut welds a segment's audio to its own picture. Real talking-head edits
+// let audio LEAD or TRAIL its picture across a join so cuts feel like conversation
+// instead of slides:
+//   audioLead  (J-cut) — this segment's audio starts N seconds EARLY, heard under
+//                        the PREVIOUS segment's picture (the next voice arrives first).
+//   audioTrail (L-cut) — this segment's audio runs N seconds LATE, heard under the
+//                        NEXT segment's picture (this voice lingers as we cut away).
+//
+// Implementation is ADDITIVE so the default graph is byte-identical (the golden
+// snapshots only change when a pack actually uses a lead/trail). The concat spine
+// stays as-is; we operate on the post-concat [outa]: MUTE the spine across each
+// bleed window, then mix in the bled audio — the L extra seconds of source —
+// adelay'd to land at the right output time. On a two-roll record this is free
+// coverage: the face mic keeps talking under a screen push-in.
+//
+// Returns the (possibly new) audio map label.
+function applyJLcuts(pack, plan, aMap, parts) {
+  const tl = pack.timeline;
+  const starts = [];
+  let t = 0;
+  for (const s of tl) { starts.push(t); t += segOutDur(s); }
+  const last = tl.length - 1;
+
+  const bleeds = [];   // { aIdx, s, e, speed, at }  — source [s,e) at output time `at`
+  const mutes = [];    // { from, to }               — spine windows to silence
+  tl.forEach((seg, i) => {
+    const sp = seg.speed || 1;
+    const aKey = segAudioKey(seg, pack);
+    const lead = i > 0 && seg.audioLead ? Math.min(+seg.audioLead, starts[i], seg.start / sp) : 0;
+    const trail = i < last && seg.audioTrail ? Math.min(+seg.audioTrail, segOutDur(tl[i + 1])) : 0;
+    if (lead > 0.001) {
+      const aIdx = plan.idxOf(aKey, `Segment ${i} audioLead`);
+      const at = +(starts[i] - lead).toFixed(3);
+      bleeds.push({ aIdx, s: +(seg.start - lead * sp).toFixed(3), e: seg.start, speed: sp, at });
+      mutes.push({ from: at, to: +starts[i].toFixed(3) });
+    }
+    if (trail > 0.001) {
+      const aIdx = plan.idxOf(aKey, `Segment ${i} audioTrail`);
+      const at = +(starts[i] + segOutDur(seg)).toFixed(3);
+      bleeds.push({ aIdx, s: seg.end, e: +(seg.end + trail * sp).toFixed(3), speed: sp, at });
+      mutes.push({ from: at, to: +(at + trail).toFixed(3) });
+    }
+  });
+  if (!bleeds.length) return aMap;
+
+  // Silence the spine under every bleed (continuous audio replaces it, so no click).
+  const enable = mutes.map((m) => `between(t\\,${m.from}\\,${m.to})`).join("+");
+  parts.push(`${aMap}volume=0:enable='${enable}'[jlmute]`);
+
+  const labels = [];
+  bleeds.forEach((b, k) => {
+    const atempo = b.speed !== 1 ? "," + atempoChain(b.speed).join(",") : "";
+    const outDur = (b.e - b.s) / b.speed;
+    const fadeOut = Math.max(0.001, outDur - 0.005).toFixed(3);
+    const ms = Math.round(b.at * 1000);
+    parts.push(`[${b.aIdx}:a]atrim=start=${b.s}:end=${b.e},asetpts=PTS-STARTPTS${atempo},` +
+      `afade=t=in:d=0.005,afade=t=out:st=${fadeOut}:d=0.005,adelay=${ms}|${ms}[jl${k}]`);
+    labels.push(`[jl${k}]`);
+  });
+  parts.push(`[jlmute]${labels.join("")}amix=inputs=${1 + labels.length}:duration=first:normalize=0[jlmix]`);
+  return "[jlmix]";
 }
 
 function buildGraph(pack, plan) {
@@ -467,8 +571,21 @@ function buildGraph(pack, plan) {
   let vMap = "[outv]";
   if (out.rawVideoFilter) { parts.push(`[outv]${out.rawVideoFilter}[outvf]`); vMap = "[outvf]"; }
 
+  // J/L cuts: bleed segment audio across joins (additive — no-op without
+  // audioLead/audioTrail, so the default graph is unchanged). Runs FIRST so the
+  // warm chain + any music apply to the whole mix, bleeds included.
+  let aMap = applyJLcuts(pack, plan, "[outa]", parts);
+
+  // Opt-in 80 Hz high-pass (POLISH-BACKLOG #9). NOT part of the locked WARM chain
+  // — it's off by default. `out.highpass: true` (→80 Hz) or a number sets the
+  // corner. Removes desk thump / plosive rumble / AC hum below the voice with no
+  // audible effect on tone. A/B it against raw WARM before committing per video.
+  if (out.highpass) {
+    const hz = out.highpass === true ? 80 : +out.highpass;
+    parts.push(`${aMap}highpass=f=${hz}[outhp]`); aMap = "[outhp]";
+  }
+
   // Audio polish (e.g. WARM = volume=7dB,alimiter), applied before music.
-  let aMap = "[outa]";
   if (out.audioFilter) { parts.push(`${aMap}${out.audioFilter}[outaf]`); aMap = "[outaf]"; }
   // Global audio escape valve: opaque filter on the spoken mix, before music.
   if (out.rawAudioFilter) { parts.push(`${aMap}${out.rawAudioFilter}[outraf]`); aMap = "[outraf]"; }
@@ -495,6 +612,16 @@ function ffmpegArgs(plan, graph, outPath) {
     "-filter_complex", graph.filterComplex,
     "-map", graph.vMap, "-map", graph.aMap,
     "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+    // Tag the colour pipeline explicitly. Without these a player GUESSES the
+    // primaries/transfer/range and guesses wrong — graded blacks crush or wash
+    // depending on the viewer's machine. bt709 + limited range is the correct,
+    // universal flag set for SDR HD delivery, one class of "looks slightly off on
+    // his machine" bug gone. (POLISH-BACKLOG #7). The encode flags alone only
+    // land the matrix + range reliably, so the h264_metadata bitstream filter
+    // pins primaries + transfer into the VUI too (1 = bt709, full_range_flag 0 =
+    // limited). Bitstream-level, so the filter_complex is untouched.
+    "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
+    "-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
     "-c:a", "aac", "-b:a", "192k",
     "-movflags", "+faststart", "-y", outPath,
   );
@@ -559,10 +686,17 @@ async function main() {
   const plan = planInputs(pack, dirname(packPath));
   const graph = buildGraph(pack, plan);
 
+  // Output path resolution. An explicit relative `--out` is resolved against the
+  // CURRENT WORKING DIRECTORY (what the caller means) — NOT the ./out fallback dir,
+  // which only homes the *default* filename. (The old code joined an explicit
+  // relative --out onto ./out and silently wrote to a bogus, often-missing path.)
   const outDir = resolve(process.cwd(), "out");
-  if (!existsSync(outDir)) mkdirSync(outDir, { recursive: true });
-  const outName = outOverride || pack.output?.filename || "edit.mp4";
-  const outPath = isAbsolute(outName) ? outName : join(outDir, outName);
+  const outName = pack.output?.filename || "edit.mp4";
+  const outPath = outOverride
+    ? (isAbsolute(outOverride) ? outOverride : resolve(process.cwd(), outOverride))
+    : (isAbsolute(outName) ? outName : join(outDir, outName));
+  const outParent = dirname(outPath);
+  if (!existsSync(outParent)) mkdirSync(outParent, { recursive: true });
   const args = ffmpegArgs(plan, graph, outPath);
 
   console.log(`Edit pack : ${packPath}`);

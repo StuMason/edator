@@ -106,7 +106,7 @@ Driven entirely by the pack (full spec:
 - **Chapters** — per-segment `chapter` titles emit a YouTube-style sidecar; pure metadata, no graph change.
 - **Picture-in-picture** — drop a roll into a corner (e.g. the camera over a diagram).
 - **Image B-roll** — hold a still (diagram / card) full-frame while narration continues.
-- **Captions** — three styles: an EdAtor chat-bubble aside, a production eyebrow label, or a plain caption.
+- **Captions** — neutral burned-in `plain` captions (positioned via `pos`). Branded/animated overlays are a downstream-compositor concern, kept out of the renderer.
 - **Bleeps** — `bleeps` on a segment censors a word: the speech is muted across the window and a gentle 1kHz tone drops in its place. Source-timed like captions, projected under `speed`.
 - **Music** — a quiet continuous bed, or a faded intro/outro bookend.
 - **Warm audio** — a gentle, transparent polish (and a strong opinion about *not* over-processing a good mic).
@@ -230,10 +230,9 @@ because you tell it what's good.
 - `ASSEMBLYAI_API_KEY` — transcription uses [AssemblyAI](https://www.assemblyai.com/)
   (Universal-3 Pro, word timestamps + disfluencies). Only the **audio** is uploaded;
   the video never leaves your machine.
-- **Fonts** (only needed if a pack has captions): a bold sans + a mono are
-  auto-detected per OS — Arial/Menlo on macOS, DejaVu/Liberation on Linux,
-  Arial/Consolas on Windows. Override either with `EDATOR_FONT` / `EDATOR_MONO`
-  (path to a `.ttf`/`.otf`). A pack with no captions needs no font.
+- **Fonts** (only needed if a pack has captions): a bold sans is auto-detected
+  per OS — Arial on macOS, DejaVu/Liberation on Linux, Arial on Windows. Override
+  with `EDATOR_FONT` (path to a `.ttf`/`.otf`). A pack with no captions needs no font.
 
 ## What's in this repo
 

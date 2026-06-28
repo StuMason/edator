@@ -8,6 +8,18 @@ All notable changes to this project are documented here. Format based on
 
 ### Added
 
+- **Finishing & delivery tools** — a stage after the cut, each runnable standalone:
+  `captions.js` (SRT + VTT sidecars projected from the source transcript through the
+  timeline), `loudness.js` (measure LUFS/true-peak; `--deliver` lands a peak-safe master
+  with one static gain, no compression), `qc.js` (delivery QC sheet — LUFS, true-peak,
+  bt709 colour tags, A/V-sync), and `phrase.js` (find a line's in/out without dumping
+  every word).
+- **Vertical reframe for shorts** (`reframe-focus.py` + bundled YuNet face model, and the
+  `reframe` / `split` pack fields) — cover-crop a 16:9 source to 9:16 tracking the face, or
+  stack screen-over-face with subs in the seam. Off by default; long-form unaffected.
+- **bt709 colour tagging** on every encode (primaries/transfer/matrix + limited range) so
+  graded blacks don't crush or wash on the viewer's player.
+- **J/L cuts** — `audioLead` / `audioTrail` let a segment's audio lead or trail its picture.
 - **Pre-flight media QC** (`preflight.js`) — the mirror of `report.js`: scores raw
   footage *before* a pack is written. Macro (freeze/black scan, variable frame rate,
   audio presence, clipping) + a **typed dead-air map** (leading/trailing/gap/pause/
@@ -29,11 +41,17 @@ All notable changes to this project are documented here. Format based on
   schema checks (ajv); the renderer refuses an invalid pack.
 - **Scorecard + contact sheet** (`report.js`) — tightness / variety / correctness /
   ceiling, roll-balance, and a labelled contact sheet so you can *see* what the pack did.
-- **Cross-platform fonts** — per-OS resolution with `EDATOR_FONT` / `EDATOR_MONO` overrides.
+- **Cross-platform fonts** — per-OS resolution with an `EDATOR_FONT` override.
 - **Golden filter_complex snapshots + CI** — a regression ratchet over the renderer's
   graph; GitHub Actions runs the suite on every push/PR.
 - **`references/personality.md`** — the EdAtor character + how to calibrate it to a
   presenter through feedback.
+
+### Changed
+
+- **Captions are now neutral by design** — the renderer burns only `plain` captions
+  (positioned via `pos`); branded/animated overlays are a downstream-compositor concern,
+  kept out of the generic renderer.
 
 ### Fixed
 

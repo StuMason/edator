@@ -59,6 +59,13 @@
           "type": "string",
           "description": "FFmpeg audio filter string applied to the concatenated spoken mix, before any music. The LOCKED house default is WARM: \"volume=7dB,alimiter=limit=0.95\" (raw Rode + gentle lift, NO denoise/EQ/loudnorm — those made it robotic). Don't reach for loudnorm."
         },
+        "highpass": {
+          "description": "Opt-in high-pass on the spoken mix, applied BEFORE the WARM chain. NOT part of the locked default — off unless set. `true` → 80 Hz; a number sets the corner frequency. The one EQ move that's all upside: removes desk thump, plosive rumble and AC hum below the voice with no audible effect on tone. A/B against raw WARM before committing per video.",
+          "oneOf": [
+            { "type": "boolean" },
+            { "type": "number", "exclusiveMinimum": 0 }
+          ]
+        },
         "declick": {
           "type": "boolean",
           "default": true,
@@ -81,7 +88,8 @@
             "file": { "type": "string", "description": "Path to the music file, relative to the pack or absolute." },
             "volume": { "type": "number", "description": "Linear gain. Defaults: 0.5 bookend, 0.12 bed." },
             "introLen": { "type": "number", "description": "Seconds of music over the open (presence enables bookend mode)." },
-            "outroLen": { "type": "number", "description": "Seconds of music over the close (presence enables bookend mode)." }
+            "outroLen": { "type": "number", "description": "Seconds of music over the close (presence enables bookend mode)." },
+            "duck": { "type": "boolean", "description": "Sidechain-duck the bed under speech (bed mode only): the music drops ~6-9 dB while the voice is present and swells back in the gaps. Mandatory the moment a continuous bed meets dialogue, or the bed fights the voice." }
           }
         }
       }
@@ -115,6 +123,10 @@
             ]
           },
           "audio": { "type": "string", "description": "Per-segment audio override (a source key). Wins over the global `audio` bed — e.g. an ident's own track, or to let one segment carry its own sound." },
+          "audioLead": { "type": "number", "minimum": 0, "description": "J-CUT: start THIS segment's audio N seconds EARLY, heard under the PREVIOUS segment's picture (the next voice arrives before its shot). Pulls N extra seconds of source audio before `start`; the spine under the previous tail is muted so they don't double. Ignored on the first segment. Clamped to the room available before the join. The classic invisible dialogue move — cuts feel like conversation, not slides." },
+          "audioTrail": { "type": "number", "minimum": 0, "description": "L-CUT: run THIS segment's audio N seconds LATE, heard under the NEXT segment's picture (this voice lingers as we cut away). Pulls N extra seconds of source audio after `end`; the next segment's audio head is muted so they don't double. Ignored on the last segment. Clamped to the next segment's duration. On a two-roll record this is free coverage — the face mic talks on under a screen push-in." },
+          "look": { "type": "string", "enum": ["cold-open", "punch", "noir", "warm"], "description": "Named house GRADE for this beat (POLISH-BACKLOG #6) — a locked, reproducible colour treatment instead of a hand-tuned rawFilter that drifts cut to cut. \"cold-open\" is the canonical graded open (contrast/sat lift + vignette); \"punch\" a stronger version for a punchline; \"noir\" desaturated high-contrast; \"warm\" a gentle warm push. Applied to the finished frame before rawFilter. Keep screen-shares ungraded — only grade a face/cold-open/punch beat." },
+          "motionBlur": { "type": "boolean", "description": "Add synthetic motion blur to an animated push (POLISH-BACKLOG #11). A fast push at 30fps can strobe/judder; this renders the move oversampled and frame-blends it back, so aggressive moves read cinematic instead of steppy — with no permanent softening of held detail. Only meaningful on a push/Ken-Burns zoom; a no-op on a static punch-in or a still cut." },
           "rawFilter": { "type": "string", "description": "ESCAPE VALVE — opaque ffmpeg filter spliced in as the LAST transform on this segment's finished frame (after scale/zoom/pip/captions/transition). Unvalidated by design; frames in → frames out, no label refs. Deterministic because it's in the pack. Reach for a typed field (zoom/pip/transition) first — raw is for the thing the vocabulary can't say yet." },
           "speed": { "type": "number", "exclusiveMinimum": 0, "description": "Playback rate for this segment: 2.0 = twice as fast (timelapse / jump-cut speedup), 0.5 = half (slow-mo). Video setpts + audio atempo stay locked, so A/V never drifts; the segment's OUTPUT duration becomes (end-start)/speed. Default 1." },
           "chapter": { "type": "string", "description": "Chapter title for this segment's start. Emits a YouTube-style sidecar (<output>.chapters.txt) with the cumulative output timestamp — pure metadata, never touches the video. Put a chapter on the first segment if you want a 0:00 marker." },
@@ -130,6 +142,22 @@
                 "end": { "type": "number", "exclusiveMinimum": 0, "description": "Word end, source-time seconds. Must be > start." }
               }
             }
+          },
+          "reframe": {
+            "description": "How this segment's roll fills the canvas when their aspect ratios differ. Default \"contain\" letterboxes (fit whole frame, pad gaps) — the legacy behaviour. \"cover\" fills the frame and crops the overflow at a focus point — what a vertical (9:16) clip needs to turn a 16:9 roll into a full-frame vertical slice: face-centred for the cam roll, the active region for the screen roll. Object form sets the focus: {\"mode\":\"cover\",\"x\":0.5,\"y\":0.3} keeps x/y (0..1) in frame as the crop bites. Composes with zoom (cover-crop establishes the framing, then the push/punch applies on top).",
+            "oneOf": [
+              { "type": "string", "enum": ["contain", "cover"] },
+              {
+                "type": "object",
+                "additionalProperties": false,
+                "required": ["mode"],
+                "properties": {
+                  "mode": { "type": "string", "enum": ["contain", "cover"] },
+                  "x": { "type": "number", "minimum": 0, "maximum": 1, "description": "Horizontal focus kept in frame, 0..1, default 0.5." },
+                  "y": { "type": "number", "minimum": 0, "maximum": 1, "description": "Vertical focus kept in frame, 0..1, default 0.5." }
+                }
+              }
+            ]
           },
           "zoom": {
             "description": "Emphasis zoom. STATIC: a number (uniform scale, e.g. 1.14) or {scale,x,y} — a fixed punch-in. ANIMATED (push): the string \"push\" (1.0→1.15 over the segment) or {from,to,x,y} — a Ken Burns move that also works on held image stills. Focus x/y default to favour the face (y high).",
@@ -148,6 +176,10 @@
                 }
               }
             ]
+          },
+          "split": {
+            "type": "boolean",
+            "description": "9:16 STACK layout: render this segment as a 50:50 vertical split — the main `source` (a screen-share) fills a top band at full width, the `pip` source (the face cam) cover-crops the bottom band, with a near-black caption seam between them. The honest treatment for a 16:9 screen-share that can't be cropped to vertical without losing it. Requires `pip` (the bottom roll) and a vertical canvas; the bottom crop honours this segment's `reframe` focus."
           },
           "pip": {
             "type": "object",
@@ -174,13 +206,11 @@
                 "end": { "type": "number", "description": "Hide at this source-time." },
                 "style": {
                   "type": "string",
-                  "enum": ["editor", "label", "plain"],
-                  "description": "editor = EdAtor's signed chat bubble (Anthropic cream/coral, auto-dodges the PiP) — clearly the AI's voice, NOT the speaker's. label = stumasondev production eyebrow (orange UPPERCASE mono on navy, leading dash). plain = neutral caption.",
+                  "enum": ["plain"],
+                  "description": "Caption style. Only \"plain\" (a neutral burned-in caption) is supported. Branded/animated overlays — signed comment bubbles, eyebrow labels, lower-thirds — are a downstream-compositor concern, not the renderer's; keep this engine generic.",
                   "default": "plain"
                 },
-                "by": { "type": "string", "description": "editor style only: sender tag, default \"EdAtor\"." },
-                "corner": { "type": "string", "enum": ["tl", "tr", "bl", "br"], "description": "Override auto-placement (editor/label)." },
-                "size": { "type": "number", "description": "Font size as a fraction of canvas height (label/plain)." },
+                "size": { "type": "number", "description": "Font size as a fraction of canvas height." },
                 "pos": { "type": "string", "enum": ["top", "bottom", "tl", "tr", "bl", "br"], "description": "plain style position, default bottom." },
                 "color": { "type": "string", "description": "plain style text colour." },
                 "boxcolor": { "type": "string", "description": "plain style box colour." }

@@ -10,8 +10,7 @@ exercises every renderer feature in one pack:
 | **Roll-switch + audio bed** | video cuts to `diagram` while `audio: "screen"` keeps the narration unbroken |
 | **Image B-roll** | the `diagram` source has `"image": true` — held as a still for its segment |
 | **Picture-in-picture** | the camera dropped into the bottom-right over the diagram |
-| **Label caption** | `"style": "label"` — a production eyebrow |
-| **EdAtor caption** | `"style": "editor"` — a signed chat-bubble aside, auto-placed opposite the PiP |
+| **Caption** | `"style": "plain"` — a neutral burned-in caption (`pos` places it) |
 | **Warm audio** | `output.audioFilter` — gentle lift + limiter, nothing more |
 
 It points at placeholder paths (`recordings/camera.mp4`, etc.). Drop your own

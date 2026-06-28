@@ -39,6 +39,9 @@ write a pack — every field there is executed; nothing is reserved.
 1. **Transcribe.** `node scripts/transcribe.js <recording.mp4>` → word-level JSON
    (AssemblyAI Universal-3 Pro, disfluencies on — every "um"/false-start
    timestamped). Only the audio leaves the machine. Needs `ASSEMBLYAI_API_KEY`.
+   Then `node scripts/phrase.js <transcript> "a line"` returns just that line's
+   in/out, and `phrase.js <transcript> --list` a sentence-level overview — read
+   those, not the whole word table.
 2. **Find real cut points.** `node scripts/envelope.js <media> --from A --to B`
    gives RMS-dBFS speech onsets — the "waveform" you cut *to*. Transcript word
    times are approximate; trust the envelope for sharp in/outs and trimming breaths.
@@ -49,7 +52,7 @@ write a pack — every field there is executed; nothing is reserved.
    the facts right. Generated B-roll must be accurate — and where the narration and
    the code disagree, the narration wins on screen.
 5. **Generate assets if they earn their place.** Diagrams / cards / idents authored
-   as on-brand HTML → screenshot → PNG (stills) or short MP4. See `references/style.md`.
+   as HTML → screenshot → PNG (stills) or short MP4, in whatever brand the presenter uses.
 6. **Write the pack.** Build `timeline` against the schema. Decorate the cut spine
    with roll-switches, PiP, zoom punch-ins, B-roll, captions, EdAtor beats.
 7. **Validate, then render.** `node scripts/validate.js <pack.json>` checks the pack
@@ -139,6 +142,9 @@ red flag, not a clean cut.
 - **`zoom:"push"` gives a static frame life.** A held still or a long talking-head
   beat earns a slow push (Ken Burns). Don't push everything — it's for the beat
   that wants to breathe, same as a punch-in is for the claim that wants emphasis.
+  The renderer supersamples before zoompan, so the push is smooth, not jittery.
+  Add **`motionBlur: true`** on a *fast* push so it reads cinematic instead of
+  strobing (oversampled + frame-blended; no-op on a static punch-in).
 - **`chapter` the structural beats.** A title on the first segment of each section
   gives YouTube chapters for free. Put one on segment 0 so the first marker is 0:00.
 - **Raw filters are the last resort, and they belong IN the pack.** If the typed
@@ -152,6 +158,11 @@ red flag, not a clean cut.
   drawtext, so it dims your own text). Stylise specific beats — a graded cold open,
   a chromatic pop on a punchline — and leave the core, and every screen-share,
   clean. Never grade under a caption.
+- **Grade with a named `look`, not an ad-hoc rawFilter.** `look:"cold-open"` (the
+  house graded open), `"punch"` (richer, for a punchline), `"noir"`, `"warm"` are
+  locked, reproducible grades — same pack → same look every video. Reach for the
+  preset first; `rawFilter` is for the one-off the palette can't say. A `look`
+  layers *under* a `rawFilter` so you can still add a glitch pop on top.
 - **A constant rawFilter spans the whole segment — so for a PUNCH, split.** A glitch
   on a 6-second segment runs for 6 seconds and reads as "something broke", not a
   joke. Want a 0.5s chromatic/glitch hit on one word? Cut a ~0.5s micro-segment at
@@ -170,9 +181,10 @@ red flag, not a clean cut.
 ## EdAtor on screen (the bit)
 
 A co-presenter, not an effects menu. Range: full-screen takeover ("HELLO EVERYONE"
-when teed up), signed chat-bubble asides (`style:"editor"`), time-skips
-(FADEOUT → "43 hours later"), production labels (`style:"label"`), B-roll it "made",
-punch-ins. A recurring gag (with a payoff) beats scattered one-liners.
+when teed up), signed asides, time-skips (FADEOUT → "43 hours later"), production
+labels, B-roll it "made", punch-ins. A recurring gag (with a payoff) beats scattered
+one-liners. The renderer itself stays generic — it lays down the clean cut (cuts,
+pip, speed, plain captions); branded/animated overlays are composited downstream.
 
 The beats that actually land — the fill-in (supply what they forgot), the wink, the
 cheeky-correction-on-harmless-facts, getting told off and rolling with it — plus the
@@ -200,6 +212,31 @@ pumpy. `afftdn` denoise = robotic and watery. EQ stacks made it worse. Policy:
 minimal or no filter — at most a gentle lift + transparent limiter
 (`output.audioFilter: "volume=7dB,alimiter=limit=0.95"`). Never denoise/EQ/loudnorm
 a voice in post; fix the room at the recording side. **Warm beats loud.**
+
+Two opt-in exceptions that are NOT loudnorm/denoise: `output.highpass: true` (an 80 Hz
+high-pass that only removes desk thump/rumble below the voice — A/B it per video),
+and `output.music.duck: true` (sidechain-duck a music bed under speech). Both off by
+default. To land a consistent level, measure don't guess: `loudness.js <cut>` reports
+integrated LUFS + true-peak vs the -14 target — raise the WARM `volume` into the
+limiter toward it; the delivery step de-clips a hot master automatically.
+
+## Finishing & delivery (after the cut is proven clean)
+
+The cut is the engine's job; **finishing + delivery** is a separate stage with its
+own tools (run them by hand, or wire them into your own pipeline):
+
+- **`captions.js <pack> <transcript>`** — SRT + VTT sidecars, projected from the
+  source transcript through the timeline. Long-form ships the sidecar; we do NOT
+  bake captions into the master (only shorts burn them in).
+- **`loudness.js <cut>`** — measure LUFS/true-peak; `--deliver` lands a peak-safe
+  master with one static gain (no compression).
+- **`qc.js <master>`** — delivery QC sheet: LUFS, true-peak, bt709 colour tags,
+  A/V-sync. Distinct from `report.js` (which scores the *cut*).
+
+The renderer also now tags **bt709 colour** (primaries/transfer/matrix + limited
+range) on every encode, so graded blacks don't crush/wash on the viewer's player.
+J/L cuts (`audioLead`/`audioTrail`) exist for sources where audio should lead/trail
+its picture — not useful on a continuous-bed talking-head, but there for dialogue.
 
 ## Requirements
 

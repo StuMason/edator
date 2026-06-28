@@ -67,9 +67,7 @@ function analyse(pack) {
     push: segs.filter((s) => s.zoom === "push" || (s.zoom && typeof s.zoom === "object" && (s.zoom.from != null || s.zoom.to != null))).length,
     chapter: segs.filter((s) => s.chapter).length,
     transition: segs.filter((s) => s.transition).length,
-    capEditor: segs.reduce((n, s) => n + (s.captions || []).filter((c) => c.style === "editor").length, 0),
-    capLabel: segs.reduce((n, s) => n + (s.captions || []).filter((c) => c.style === "label").length, 0),
-    capPlain: segs.reduce((n, s) => n + (s.captions || []).filter((c) => !c.style || c.style === "plain").length, 0),
+    capPlain: segs.reduce((n, s) => n + (s.captions || []).length, 0),
     music: out.music ? 1 : 0,
   };
 
@@ -93,13 +91,15 @@ function analyse(pack) {
   const af = out.audioFilter || "";
   const audioBad = /loudnorm|afftdn|anlmdn|equalizer|highpass|lowpass/i.test(af);
   const audioWarm = /alimiter/i.test(af) && !audioBad;
+  // Opt-in high-pass is the one blessed EQ move (typed field, not the WARM string).
+  const highpass = out.highpass === true ? 80 : (typeof out.highpass === "number" ? out.highpass : 0);
 
   // distinct kinds of move actually used (for a variety read)
-  const moveKinds = ["rollSwitch", "pip", "zoom", "push", "image", "speed", "chapter", "transition", "capEditor", "capLabel", "music"]
+  const moveKinds = ["rollSwitch", "pip", "zoom", "push", "image", "speed", "chapter", "transition", "capPlain", "music"]
     .filter((k) => moves[k] > 0).length;
 
   return { total, count: segs.length, durations, median, thTime, thPct: total ? thTime / total : 0,
-    longestStatic, moves, moveKinds, draggers, churn, audioWarm, audioBad, audioFilter: af,
+    longestStatic, moves, moveKinds, draggers, churn, audioWarm, audioBad, audioFilter: af, highpass,
     rollBalance, multiRoll, topRoll };
 }
 
@@ -124,7 +124,7 @@ function scorecard(pack, m, validation) {
   if (m.longestStatic > 15) vFlags.push(`${fmt(m.longestStatic)}s static stretch`);
   const mv = m.moves;
   L.push(`VARIETY      talking-head ${Math.round(m.thPct * 100)}% · ${m.moveKinds} move-kinds · ` +
-    `roll×${mv.rollSwitch} pip×${mv.pip} zoom×${mv.zoom} img×${mv.image} cap(ed${mv.capEditor}/lab${mv.capLabel}/pl${mv.capPlain})` +
+    `roll×${mv.rollSwitch} pip×${mv.pip} zoom×${mv.zoom} img×${mv.image} cap×${mv.capPlain}` +
     (mv.speed ? ` speed×${mv.speed}` : "") + (mv.transition ? ` trans×${mv.transition}` : "") + (mv.music ? " music" : ""));
   if (vFlags.length) L.push(`             ⚠ ${vFlags.join(" · ")}`);
 
@@ -140,7 +140,7 @@ function scorecard(pack, m, validation) {
   if (validation.errors.length) cFlags.push(`validation: ${validation.errors.length} error(s)`);
   if (m.audioBad) cFlags.push("audio: over-processed (loudnorm/EQ/denoise — not WARM)");
   L.push(`CORRECTNESS  validation ${validation.errors.length ? "✗ FAIL" : "✓ pass"} · ` +
-    `audio ${m.audioWarm ? "WARM ✓" : (m.audioFilter ? "⚠ check" : "none")} · ` +
+    `audio ${m.audioWarm ? "WARM ✓" : (m.audioFilter ? "⚠ check" : "none")}${m.highpass ? ` +HPF ${m.highpass}Hz` : ""} · ` +
     `captions in-bounds ${validation.errors.some((e) => e.includes("captions")) ? "✗" : "✓"}`);
   if (cFlags.length) for (const f of cFlags) L.push(`             ⚠ ${f}`);
 
@@ -149,7 +149,6 @@ function scorecard(pack, m, validation) {
   if (mv.pip) ambitious.push(`${mv.pip} PiP`);
   if (mv.zoom - mv.push > 0) ambitious.push(`${mv.zoom - mv.push} punch-in`);   // static crops
   if (mv.push) ambitious.push(`${mv.push} push`);
-  if (mv.capEditor) ambitious.push(`${mv.capEditor} EdAtor aside`);
   if (mv.image) ambitious.push(`${mv.image} B-roll card`);
   if (mv.speed) ambitious.push(`${mv.speed} speed-ramp`);
   if (mv.chapter) ambitious.push(`${mv.chapter} chapters`);
