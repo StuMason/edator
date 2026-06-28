@@ -7,8 +7,8 @@
     { "source": "screen", "start": 0.0, "end": 12.0,
       "pip": { "source": "cam", "corner": "br", "width": 0.26, "margin": 0.02 },
       "captions": [
-        { "text": "read-only API", "style": "label", "start": 2.0, "end": 6.0 },
-        { "text": "he wrote this at 2am. it shows.", "style": "editor", "start": 7.0, "end": 10.0 },
+        { "text": "read-only API", "style": "plain", "pos": "tl", "start": 2.0, "end": 6.0 },
+        { "text": "he wrote this at 2am. it shows.", "style": "plain", "pos": "top", "start": 7.0, "end": 10.0 },
         { "text": "plain note", "style": "plain", "start": 10.5, "end": 11.5 }
       ] }
   ]

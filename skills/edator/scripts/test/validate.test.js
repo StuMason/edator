@@ -20,7 +20,7 @@ const base = () => ({
   timeline: [
     { source: "cam", start: 1, end: 5 },
     { source: "card", start: 5, end: 9, pip: { source: "cam", corner: "br" },
-      captions: [{ text: "hi", style: "label", start: 6, end: 8 }] },
+      captions: [{ text: "hi", style: "plain", start: 6, end: 8 }] },
   ],
 });
 

@@ -45,6 +45,46 @@ upstream is creative and can be as clever as it likes. Everything downstream is
 deterministic and reproducible. Get the boundary right and each half evolves
 independently.
 
+## Great for marketing — one take, a week of content
+
+Marketing video is expensive because *editing* is expensive. Edator removes the editor.
+Record a product demo, a feature walkthrough, a founder update — and Claude turns it into
+publish-ready marketing: a tight hero cut for your site or launch, plus a stack of vertical
+shorts for socials. No editor, no agency retainer, no timeline. If you can hit record, you
+can ship marketing video.
+
+**The part worth saying out loud:** in the videos below, *every* editorial decision — every
+cut, roll-switch, zoom, bleep, caption, and where each overlay card fires — is Claude's. The
+only human input was the raw camera roll, the screen roll, and the mic. Stu hit record and
+talked; EdAtor made the edit.
+
+**A 2:55 product cut** — raw screen-record in, finished video out:
+
+<video src="https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/meta-edator-full.mp4" poster="https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/poster-full.jpg" controls muted width="100%"></video>
+
+▶ [watch the full cut](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/meta-edator-full.mp4)
+
+**Before → after** — the same 9 seconds: the raw take, then EdAtor's cut:
+
+<video src="https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/meta-edator-before-after.mp4" poster="https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/poster-before-after.jpg" controls muted width="100%"></video>
+
+▶ [watch before/after](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/meta-edator-before-after.mp4)
+
+### …and the socials write themselves
+
+One recording becomes a week of vertical content. Claude picks the segments worth clipping;
+the engine reframes the **pristine 16:9 source** to 9:16 — face-tracked cover-crop, or
+screen-over-face with captions in the seam — never a letterboxed re-crop of the finished
+video. *Click any thumbnail to play.*
+
+| [![the hook](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/poster-clip-01.jpg)](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/clip-01-hook.mp4) | [![the pipeline](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/poster-clip-02.jpg)](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/clip-02-pipeline.mp4) | [![mac rant](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/poster-clip-04.jpg)](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/clip-04-mac.mp4) | [![the payoff](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/poster-clip-05.jpg)](https://pub-fcbeffd9daba46b793c5048ad794683f.r2.dev/examples/clip-05-payoff.mp4) |
+|:--:|:--:|:--:|:--:|
+| **The hook** · 0:09 | **The pipeline** · 0:45 | **Mac rant** · 0:35 | **The payoff** · 0:24 |
+
+> Overlay cards are dressed by a downstream compositor; the renderer in this repo produces
+> the clean cut. The *decisions* — what to cut, what to clip, where every card fires — are
+> the AI's, made from your raw footage.
+
 ## Install
 
 ```bash
@@ -106,7 +146,7 @@ Driven entirely by the pack (full spec:
 - **Chapters** — per-segment `chapter` titles emit a YouTube-style sidecar; pure metadata, no graph change.
 - **Picture-in-picture** — drop a roll into a corner (e.g. the camera over a diagram).
 - **Image B-roll** — hold a still (diagram / card) full-frame while narration continues.
-- **Captions** — three styles: an EdAtor chat-bubble aside, a production eyebrow label, or a plain caption.
+- **Captions** — neutral burned-in `plain` captions (positioned via `pos`). Branded/animated overlays are a downstream-compositor concern, kept out of the renderer.
 - **Bleeps** — `bleeps` on a segment censors a word: the speech is muted across the window and a gentle 1kHz tone drops in its place. Source-timed like captions, projected under `speed`.
 - **Music** — a quiet continuous bed, or a faded intro/outro bookend.
 - **Warm audio** — a gentle, transparent polish (and a strong opinion about *not* over-processing a good mic).
@@ -230,10 +270,9 @@ because you tell it what's good.
 - `ASSEMBLYAI_API_KEY` — transcription uses [AssemblyAI](https://www.assemblyai.com/)
   (Universal-3 Pro, word timestamps + disfluencies). Only the **audio** is uploaded;
   the video never leaves your machine.
-- **Fonts** (only needed if a pack has captions): a bold sans + a mono are
-  auto-detected per OS — Arial/Menlo on macOS, DejaVu/Liberation on Linux,
-  Arial/Consolas on Windows. Override either with `EDATOR_FONT` / `EDATOR_MONO`
-  (path to a `.ttf`/`.otf`). A pack with no captions needs no font.
+- **Fonts** (only needed if a pack has captions): a bold sans is auto-detected
+  per OS — Arial on macOS, DejaVu/Liberation on Linux, Arial on Windows. Override
+  with `EDATOR_FONT` (path to a `.ttf`/`.otf`). A pack with no captions needs no font.
 
 ## What's in this repo
 
