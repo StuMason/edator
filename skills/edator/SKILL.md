@@ -223,7 +223,7 @@ limiter toward it; the delivery step de-clips a hot master automatically.
 ## Finishing & delivery (after the cut is proven clean)
 
 The cut is the engine's job; **finishing + delivery** is a separate stage with its
-own tools (run them by hand, or wire them into your own pipeline):
+own tools (run by `bin/edator.mjs` `deliver`, or by hand):
 
 - **`captions.js <pack> <transcript>`** — SRT + VTT sidecars, projected from the
   source transcript through the timeline. Long-form ships the sidecar; we do NOT
@@ -232,6 +232,7 @@ own tools (run them by hand, or wire them into your own pipeline):
   master with one static gain (no compression).
 - **`qc.js <master>`** — delivery QC sheet: LUFS, true-peak, bt709 colour tags,
   A/V-sync. Distinct from `report.js` (which scores the *cut*).
+- **`brand/overlay-kit/thumbs.js`** — three Signal thumbnail options.
 
 The renderer also now tags **bt709 colour** (primaries/transfer/matrix + limited
 range) on every encode, so graded blacks don't crush/wash on the viewer's player.

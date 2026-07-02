@@ -32,10 +32,10 @@
  *   node render.js <edit-pack.json> [--out <file.mp4>] [--dry-run]
  */
 
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { readFileSync, writeFileSync, existsSync, mkdirSync, mkdtempSync } from "node:fs";
 import { dirname, resolve, isAbsolute, join } from "node:path";
-import { tmpdir, platform } from "node:os";
+import { tmpdir, platform, homedir } from "node:os";
 import { fileURLToPath } from "node:url";
 import { validatePack } from "./validate.js";
 import { segOutDur, segAudioKey } from "./timeline.js";
@@ -186,6 +186,41 @@ function planInputs(pack, packDir) {
     }
   });
 
+  // ── zoom:{face:true} — solve the face position, don't guess it ─────────────
+  // A static zoom assumes the presenter holds still; they don't. `face: true`
+  // shells to the YuNet solver (reframe-focus.py) over the segment's window and
+  // derives the focus that lands the median face at the requested side of the
+  // canvas (default: x 0.70 for side "right", 0.30 for "left"; y 0.45).
+  // Deterministic — same footage, same median, same crop. Fails LOUD if the CV
+  // stack is missing: a silent centre fallback would put a teach panel over the
+  // presenter's face.
+  pack.timeline.forEach((seg, i) => {
+    if (!(seg.zoom && typeof seg.zoom === "object" && seg.zoom.face)) return;
+    if (seg._isImage) die(`Segment ${i}: zoom.face needs a video roll, not a still.`);
+    const z = seg.zoom.scale || 1.6;
+    if (!(z > 1)) die(`Segment ${i}: zoom.face needs scale > 1 (got ${z}).`);
+    const side = seg.zoom.side || "right";
+    const outX = side === "left" ? 0.3 : 0.7;
+    const outY = 0.45;
+    const venvPy = join(homedir(), ".venv-edator", "bin", "python");
+    const py = existsSync(venvPy) ? venvPy : "python3";
+    let face;
+    try {
+      face = JSON.parse(execFileSync(py, [join(__dirname, "reframe-focus.py"),
+        ffInputs[seg._vIdx].path, "--in", String(seg.start), "--out", String(seg.end),
+        "--role", "face", "--json"], { stdio: ["ignore", "pipe", "pipe"] }).toString());
+    } catch (e) {
+      die(`Segment ${i}: zoom.face solver failed — ${String(e.message).split("\n")[0]}\n` +
+        `  needs cv2/numpy for reframe-focus.py (run: node bin/doctor.mjs --fix)`);
+    }
+    // Static-zoom crop places output X at  z·face − (z−1)·fx  ⇒ solve for fx/fy.
+    const clamp01 = (v) => Math.min(1, Math.max(0, v));
+    const fx = clamp01((face.x * z - outX) / (z - 1));
+    const fy = clamp01((face.y * z - outY) / (z - 1));
+    seg.zoom = { scale: z, x: +fx.toFixed(4), y: +fy.toFixed(4) };
+    console.log(`  · seg ${i} zoom.face: face(${face.x}, ${face.y}) conf ${face.confidence} → {scale ${z}, x ${fx.toFixed(3)}, y ${fy.toFixed(3)}} (face → ${side})`);
+  });
+
   // Music input goes last so its index is stable regardless of how many stills precede it.
   let musicIdx = null;
   const bookend = !!(pack.output?.music && (pack.output.music.introLen || pack.output.music.outroLen));
@@ -218,20 +253,28 @@ function pushFilters(z, W, H, dur, fps, motionBlur) {
   // (tmix), then decimate back to f — true synthetic motion blur on the move,
   // with NO permanent softening of held detail. Off → sub=1, byte-identical path.
   const sub = motionBlur ? 3 : 1;
-  const fZoom = f * sub;                         // zoompan's internal (oversampled) rate
+  const fZoom = f * sub;                         // oversampled rate the push runs at
   const N = Math.max(1, Math.round(dur * fZoom));   // frames over the segment at that rate
   const zexpr = `${from}+(${to}-${from})*on/${N}`;
   // zoompan rounds the crop window to whole INPUT pixels each frame, so a slow
   // push moves sub-pixel/frame and visibly "sticks then jumps" (jitter). Cure:
   // supersample the frame up first, so 1px of rounding is a fraction of an output
-  // pixel. SS=4 makes the shake imperceptible; it only runs on push segments.
-  const SS = 4;
-  // d=sub emits `sub` output frames per INPUT frame, each at its own zoom step, so
-  // oversampling to fZoom preserves the segment's DURATION (d=1 would keep only the
-  // 30 source frames and play 3× fast). tmix then blends each group → motion blur.
+  // pixel. Cost scales with SS² — at 1080p, SS=4 means rendering pushes at 7680×4320
+  // (16× the pixels) which tanks throughput. Make it resolution-aware: SS=2 at ≥1080p
+  // still puts the supersample at 2160p (rounding ≈ half an output pixel — imperceptible),
+  // SS=4 stays for smaller canvases where the absolute pixel budget is tiny.
+  const SS = H >= 1080 ? 2 : 4;
+  // zoompan's frame TIMING is fragile: with d>1, or with any `fps` filter applied
+  // downstream of it, it re-stamps frames such that a later resample multiplies the
+  // output ~20× (a 3s push rendered as 65s). The safe recipe is d=1 on an input we
+  // have ALREADY oversampled to the target rate (fps=${fZoom} up front), so zoompan
+  // emits exactly one correctly-timed frame per input frame. For motion blur, tmix
+  // blends each oversampled group and a SINGLE trailing fps decimates back to f.
+  // CALLER MUST NOT append another fps after this — pushFilters owns the final rate.
   const out = [
+    `fps=${fZoom}`,
     `scale=${even(W * SS)}:${even(H * SS)}:flags=bicubic`,
-    `zoompan=z='${zexpr}':x='(iw-iw/zoom)*${fx}':y='(ih-ih/zoom)*${fy}':d=${sub}:s=${W}x${H}:fps=${fZoom}`,
+    `zoompan=z='${zexpr}':x='(iw-iw/zoom)*${fx}':y='(ih-ih/zoom)*${fy}':d=1:s=${W}x${H}:fps=${fZoom}`,
   ];
   if (motionBlur) out.push(`tmix=frames=${sub}:weights='${Array(sub).fill(1).join(" ")}'`, `fps=${f}`);
   return out;
@@ -281,7 +324,9 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     const fit = fitChain(seg.reframe, W, H);
     base.push(`[${seg._vIdx}:v]${fit[0]}`, ...fit.slice(1));
     if (seg.zoom && isPush(seg.zoom)) base.push(...pushFilters(seg.zoom === "push" ? {} : seg.zoom, W, H, segOutDur(seg), seg._fps, seg.motionBlur));   // Ken Burns on a still
-    if (wantFps) base.push(`fps=${seg._fps}`);
+    // pushFilters already pins the output rate; a trailing fps here re-stamps
+    // zoompan's frames and multiplies the duration ~20× — only add it otherwise.
+    if (wantFps && !(seg.zoom && isPush(seg.zoom))) base.push(`fps=${seg._fps}`);
     base.push("setsar=1");
   } else {
     base.push(`[${seg._vIdx}:v]trim=start=${seg.start}:end=${seg.end}`, setpts);
@@ -300,7 +345,9 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     } else if (wantScale) {
       base.push(...fitChain(seg.reframe, W, H));
     }
-    if (wantFps) base.push(`fps=${seg._fps}`);
+    // pushFilters already pins the output rate; a trailing fps here re-stamps
+    // zoompan's frames and multiplies the duration ~20× — only add it otherwise.
+    if (wantFps && !(seg.zoom && isPush(seg.zoom))) base.push(`fps=${seg._fps}`);
     base.push("setsar=1");
   }
 
@@ -343,11 +390,20 @@ function buildVideoChain(seg, i, W, H, idxOf, parts) {
     const fx = rf.x != null ? rf.x : 0.5, fy = rf.y != null ? rf.y : 0.42;
     const f = seg._fps || 30, dur = segOutDur(seg).toFixed(3);
     const ovOut = capChain ? `[ov${i}]` : vTerm;
-    parts.push(`[${seg._vIdx}:v]trim=start=${seg.start}:end=${seg.end},${setpts},scale=${W}:${sH},setsar=1[top${i}]`);
-    parts.push(`[${camIdx}:v]trim=start=${seg.start}:end=${seg.end},${setpts},scale=${W}:${cH}:force_original_aspect_ratio=increase,crop=${W}:${cH}:(iw-${W})*${fx}:(ih-${cH})*${fy},setsar=1[bot${i}]`);
+    // An image main is a looped still already cut to length (t=0..dur) — trimming
+    // it at source-time yields an empty stream and a runaway output. No trim.
+    if (seg._isImage) {
+      parts.push(`[${seg._vIdx}:v]scale=${W}:${sH},setsar=1${wantFps ? `,fps=${f}` : ""}[top${i}]`);
+    } else {
+      parts.push(`[${seg._vIdx}:v]trim=start=${seg.start}:end=${seg.end},${setpts},scale=${W}:${sH},setsar=1${wantFps ? `,fps=${f}` : ""}[top${i}]`);
+    }
+    parts.push(`[${camIdx}:v]trim=start=${seg.start}:end=${seg.end},${setpts},scale=${W}:${cH}:force_original_aspect_ratio=increase,crop=${W}:${cH}:(iw-${W})*${fx}:(ih-${cH})*${fy},setsar=1${wantFps ? `,fps=${f}` : ""}[bot${i}]`);
     parts.push(`color=c=0x0a0c10:s=${W}x${H}:r=${f}:d=${dur},setsar=1[cv${i}]`);
+    // Rate is pinned per-branch + by the colour canvas. A trailing fps AFTER the
+    // overlays pads to the repeated band's timestamps and runs away unbounded
+    // (matrix case split-video-main: 2s pack → 1024s output). Never re-stamp here.
     parts.push(`[cv${i}][top${i}]overlay=0:${sY}:eof_action=repeat[ct${i}]`);
-    parts.push(`[ct${i}][bot${i}]overlay=0:${cY}:eof_action=repeat${wantFps ? `,fps=${seg._fps}` : ""}${ovOut}`);
+    parts.push(`[ct${i}][bot${i}]overlay=0:${cY}:eof_action=repeat${ovOut}`);
     if (capChain) parts.push(`[ov${i}]${capChain}${vTerm}`);
   } else if (seg.pip) {
     const pIdx = idxOf(seg.pip.source, `Segment ${i} pip`);
@@ -611,7 +667,7 @@ function ffmpegArgs(plan, graph, outPath) {
   args.push(
     "-filter_complex", graph.filterComplex,
     "-map", graph.vMap, "-map", graph.aMap,
-    "-c:v", "libx264", "-preset", "medium", "-crf", "18", "-pix_fmt", "yuv420p",
+    "-c:v", "libx264", "-preset", "medium", "-crf", "16", "-pix_fmt", "yuv420p",
     // Tag the colour pipeline explicitly. Without these a player GUESSES the
     // primaries/transfer/range and guesses wrong — graded blacks crush or wash
     // depending on the viewer's machine. bt709 + limited range is the correct,
@@ -622,7 +678,7 @@ function ffmpegArgs(plan, graph, outPath) {
     // limited). Bitstream-level, so the filter_complex is untouched.
     "-colorspace", "bt709", "-color_primaries", "bt709", "-color_trc", "bt709", "-color_range", "tv",
     "-bsf:v", "h264_metadata=colour_primaries=1:transfer_characteristics=1:matrix_coefficients=1:video_full_range_flag=0",
-    "-c:a", "aac", "-b:a", "192k",
+    "-c:a", "aac", "-b:a", "256k",
     "-movflags", "+faststart", "-y", outPath,
   );
   return args;

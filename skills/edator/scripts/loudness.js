@@ -21,7 +21,7 @@
  *     [--target -14] [--tp -1]
  */
 import { spawnSync } from "node:child_process";
-import { existsSync } from "node:fs";
+import { existsSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -114,6 +114,24 @@ function main() {
       "-c:v", "copy", ...af, "-movflags", "+faststart", "-y", outPath], { stdio: "inherit" });
     if (r.status !== 0) die(`ffmpeg trim failed (exit ${r.status})`);
     result.output = outPath;
+  }
+
+  // Optional calibration sidecar: what the RENDER-side WARM gain should change
+  // by so the next master lands on target without a delivery trim. Written on
+  // --deliver runs; an orchestrator can read it back and warn pre-render —
+  // closing the loop instead of leaving the advice in a log nobody re-reads.
+  const calibPath = flag("--calib");
+  if (calibPath && deliver) {
+    const residual = +(target - (result.predicted?.lufs ?? meas.i)).toFixed(2);
+    writeFileSync(resolve(calibPath), JSON.stringify({
+      at: new Date().toISOString(), input: inPath, measuredLufs: meas.i, truePeak: meas.tp,
+      target, deliveredGainDb: result.gainDb,
+      suggestedWarmDeltaDb: residual,
+      note: residual > 0.3 && meas.tp >= -1.05
+        ? "limiter-bound: peaks already at ceiling — extra WARM gain converts to limiting, not loudness"
+        : undefined,
+    }, null, 2));
+    result.calibration = calibPath;
   }
 
   if (wantJson) {
