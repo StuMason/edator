@@ -49,7 +49,10 @@ function analyse(pack) {
   const total = durations.reduce((a, b) => a + b, 0);
 
   // A "static talking-head" segment: a moving roll with no pip, zoom, or captions.
-  const isStatic = (s) => !isImage(s.source) && !s.pip && !s.zoom && !(s.captions && s.captions.length);
+  // A graded beat or a rawFilter accent (chroma pop, fade) IS a visual move —
+  // counting it static flagged stretches that actually contain the punchline.
+  const isStatic = (s) => !isImage(s.source) && !s.pip && !s.zoom && !s.look && !s.rawFilter
+    && !(s.captions && s.captions.length);
   const thTime = segs.filter(isStatic).reduce((a, s) => a + dur(s), 0);
 
   // longest consecutive static stretch (seconds)
@@ -162,18 +165,26 @@ function scorecard(pack, m, validation) {
 // ---- contact sheet (needs the rendered mp4) -------------------------------
 function buildContactSheet(pack, m, mp4, sheetPath, cols) {
   if (!existsSync(mp4)) die(`--contact file not found: ${mp4}`);
-  // output-time midpoints of each segment
+  // Sample points per segment: one midpoint frame for short beats, THREE
+  // (25/50/75%) for anything over 8s — a single frame of a long segment can
+  // catch a lean/blink and send you chasing a framing bug that isn't there.
   let acc = 0;
-  const mids = m.durations.map((d) => { const mid = acc + d / 2; acc += d; return mid; });
-  const work = mkdtempSync(join(tmpdir(), "edator-sheet-"));
+  const samples = [];
   pack.timeline.forEach((s, i) => {
+    const d = m.durations[i];
+    const at = d > 8 ? [0.25, 0.5, 0.75] : [0.5];
+    at.forEach((f, k) => samples.push({ t: acc + d * f, label: `${i}${at.length > 1 ? "abc"[k] : ""}:${s.source}` }));
+    acc += d;
+  });
+  const work = mkdtempSync(join(tmpdir(), "edator-sheet-"));
+  samples.forEach((s, i) => {
     const thumb = join(work, `t${String(i).padStart(3, "0")}.png`);
-    const label = `${i}:${s.source}`.replace(/:/g, "\\:");
+    const label = s.label.replace(/:/g, "\\:");
     const vf = `scale=320:-2,drawbox=x=0:y=0:w=iw:h=22:color=black@0.6:t=fill,` +
       `drawtext=text='${label}':x=5:y=3:fontsize=15:fontcolor=white`;
-    spawnSync("ffmpeg", ["-v", "error", "-ss", String(mids[i].toFixed(2)), "-i", mp4, "-frames:v", "1", "-vf", vf, "-y", thumb]);
+    spawnSync("ffmpeg", ["-v", "error", "-ss", String(s.t.toFixed(2)), "-i", mp4, "-frames:v", "1", "-vf", vf, "-y", thumb]);
   });
-  const n = pack.timeline.length;
+  const n = samples.length;
   const c = cols || Math.ceil(Math.sqrt(n));
   const rows = Math.ceil(n / c);
   const r = spawnSync("ffmpeg", ["-v", "error", "-framerate", "1", "-i", join(work, "t%03d.png"),
