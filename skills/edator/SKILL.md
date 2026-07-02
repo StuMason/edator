@@ -226,7 +226,11 @@ pip, speed, plain captions); branded/animated overlays are composited downstream
 the presenter, cut to them reacting for 0.5–0.8s where the rolls provide it (a look,
 a pause, an inhale — cam rolls are full of them; source an adjacent take moment if
 the exact beat is mid-word). A correction with no reaction is a footnote; with one
-it's a scene.
+it's a scene. **The trap (learned on prompt-caching v5): on identical framing a
+short insert reads as a jump-cut stutter, not a reaction.** The insert must LOOK
+different — a visibly changed pose, a lean, or disguise the join with a punch-in.
+If the footage doesn't offer that, the presenter's own next in-point is the
+reaction; skip the insert.
 
 The beats that actually land — the fill-in (supply what they forgot), the wink, the
 cheeky-correction-on-harmless-facts, getting told off and rolling with it — plus the
