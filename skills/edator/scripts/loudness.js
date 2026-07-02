@@ -62,7 +62,10 @@ export function planGain(meas, target = -14, tpCeil = -1) {
 export function planDelivery(meas, target = -14, tpCeil = -1) {
   const liftToTarget = +(target - meas.i).toFixed(2);
   const peakAfterLift = +(meas.tp + liftToTarget).toFixed(2);
-  const tpSafe = -1.0;   // pre-AAC true-peak target for a de-clip (leaves headroom for AAC re-expansion)
+  // Pre-AAC true-peak target for a de-clip. Must sit BELOW the ceiling: AAC
+  // re-expansion overshoots ~0.1 dB, and targeting the ceiling exactly shipped
+  // a master at -0.99 dBTP against the -1.0 gate (QC WARN on a rounding hair).
+  const tpSafe = tpCeil - 0.15;
   let gain = 0, action = "within tolerance — clean remux, no gain change";
   if (liftToTarget > 0.3 && peakAfterLift <= tpCeil) {
     // Clean lift: there's headroom to reach target without clipping.

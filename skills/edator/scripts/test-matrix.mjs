@@ -35,6 +35,8 @@ sh("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "smptebars=size=320x180:rate=3
   "-c:v", "libx264", "-preset", "ultrafast", "-y", join(work, "alt.mp4")]);
 sh("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "testsrc2=size=320x180:rate=30", "-frames:v", "1",
   "-y", join(work, "card.png")]);
+sh("ffmpeg", ["-v", "error", "-f", "lavfi", "-i", "sine=frequency=2000:sample_rate=48000", "-t", "0.3",
+  "-af", "volume=-20dB", "-y", join(work, "fx.wav")]);
 
 const SRC = {
   main: { file: "main.mp4", fps: 30, duration: 10 },
@@ -58,6 +60,9 @@ const CASES = [
   { name: "split-image-main", out: vertical, tl: [{ source: "card", start: 2, end: 4, split: true, pip: { source: "alt" }, reframe: { mode: "cover", x: 0.5, y: 0.4 } }], dur: 2 },
   { name: "reframe-cover", out: vertical, tl: [{ source: "main", start: 2, end: 4, reframe: { mode: "cover", x: 0.5, y: 0.4 } }], dur: 2 },
   { name: "bleep", out: landscape, tl: [{ source: "main", start: 2, end: 4, bleeps: [{ start: 2.5, end: 2.9 }] }], dur: 2 },
+  { name: "sfx", out: landscape, tl: [{ source: "main", start: 2, end: 4, sfx: [{ file: "fx.wav", start: 2.5 }] }], dur: 2 },
+  { name: "sfx+speed", out: landscape, tl: [{ source: "main", start: 2, end: 6, speed: 2, sfx: [{ file: "fx.wav", start: 3, gain: 0.8 }] }], dur: 2 },
+  { name: "sfx+bleep", out: landscape, tl: [{ source: "main", start: 2, end: 4, bleeps: [{ start: 2.5, end: 2.9 }], sfx: [{ file: "fx.wav", start: 3.2 }] }], dur: 2 },
   { name: "dip-join", out: landscape, tl: [{ source: "main", start: 2, end: 4 }, { source: "main", start: 6, end: 8, transition: "dip" }], dur: 4 },
   { name: "speed+image+dip", out: landscape, tl: [{ source: "main", start: 2, end: 6, speed: 2 }, { source: "card", start: 6, end: 8, transition: "dip" }], dur: 4 },
 ];

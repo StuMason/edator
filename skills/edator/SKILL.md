@@ -74,10 +74,17 @@ write a pack — every field there is executed; nothing is reserved.
    segment that ends a beat too late leaves a false start ("at the moment I'm
    using— at the moment it's using…"), or a cut lands mid-word. The output
    transcript is the ground truth of how the cut actually *sounds*. It's a paid
-   re-transcribe, so it's optional — but it's the cheapest way to catch the audio
-   jank the contact sheet can't show. (Cheaper proxy: the cut's audio is exactly
-   the kept `[start,end)` spans of the source transcript — scan those for repeats
-   before paying.)
+   re-transcribe but it costs pennies against a shipped flaw — treat it as a
+   DEFAULT step, not an optional one: a cut once shipped opening on "9% of my…"
+   (the hook's "six-" clipped) and the read-back would have caught it in one pass.
+   Two rules for reading it:
+   - **In-points:** ASR word-start times LAG the acoustic onset (worst on
+     numbers/emphasis). The envelope's "pre-word energy" is usually the word, not
+     a breath — pad segment starts ~0.2s before the envelope onset.
+   - **Bleeps:** the ASR will happily transcribe a fully-bleeped swear from
+     context — a censored word appearing in the output transcript is NOT a leak.
+     Verify bleeps with a spectrogram (`ffmpeg … showspectrumpic`): a clean bleep
+     is a bright 1 kHz line (+ limiter-harmonic ladder) over a BLACK background.
 
 ## Two-roll recording (optional but great)
 
@@ -126,10 +133,26 @@ red flag, not a clean cut.
   hook line, played straight — *before* the ident sting drops. Grabs attention with a
   question, then the brand hits, then you're into it. The hook is usually the
   presenter's natural strong opener; let it open cold, then start the body after it.
-- **Cut tighter than feels comfortable.** Less talking-head, shorter overall. Long
-  and static is the failure mode. Drop a beat that doesn't earn its place.
+- **Cut tighter than feels comfortable — except the joke.** Less talking-head, shorter
+  overall. Long and static is the failure mode. Drop a beat that doesn't earn its place.
+  **Comedy air is the one exception:** tightness is for information; jokes need air. A
+  punchline — the presenter's or a card's — earns a **0.4–0.6s held beat** before the
+  next cut (extend the segment end into the real pause that follows the line; the pause
+  is almost always in the raw). A quip card must fully land in silence-from-the-presenter
+  — fire it in a pause, or make one. If killing dead air kills a laugh, the laugh wins.
 - **Visual variety by default** — rotate the moves; don't repeat the same two
   effects. A roll-switch, a punch-in, a card, an aside, a label — keep it moving.
+- **Escalate the devices — never spend the loudest one early.** The dressing has acts:
+  open sparse (corner cards only in act 1) → first full-frame graphic no earlier than
+  ~the 40% mark → the single biggest device (number-hit / takeover) on the thesis beat,
+  around the two-thirds point. Chapter-lowers are exempt (they're wayfinding, not
+  fireworks), and a teach panel is teaching, not spectacle — it may come earlier when
+  the material earns it.
+- **Stakes stay visible.** If the video's argument is a growing number (cost, tokens,
+  time), put the number ON SCREEN growing for the stretch it grows over (the brand
+  kit's ticker chyron) and time its settle to the reveal word — don't ask the viewer to
+  hold the number in their head for four minutes. It's the only persistent overlay;
+  nothing else occupies its corner while it's live.
 - **No nonsense decoration.** Don't staple unrelated subheaders onto cards. If it
   doesn't belong, it doesn't go in.
 - **Cuts declick themselves.** Every join gets an automatic 5ms audio fade — you
@@ -139,6 +162,11 @@ red flag, not a clean cut.
 - **Speed-ramp the dead time.** A long wait (install, build, scaffold) is a
   `speed` segment, not a cut — `"speed": 3.0` keeps continuity where a hard cut
   would feel like a jump. A/V stays locked; caption it so the viewer's in on it.
+- **Face-anchored framing is SOLVED, not guessed.** For a teach-panel beat (face
+  parked on one side, panel on the other) use `zoom: {face: true, scale: 1.6,
+  side: "right"}` — the renderer runs the YuNet face solver over that segment's
+  window at plan time and computes the focus from where the presenter actually
+  sat in THIS take. Hand-tuned x/y numbers drift the moment they lean.
 - **`zoom:"push"` gives a static frame life.** A held still or a long talking-head
   beat earns a slow push (Ken Burns). Don't push everything — it's for the beat
   that wants to breathe, same as a punch-in is for the claim that wants emphasis.
@@ -173,6 +201,14 @@ red flag, not a clean cut.
   tone sits *just below* speech level: a casual "shit" gets a casual bleep,
   not an air-raid siren. Keep windows tight to the word — a long bleep reads as a
   bigger swear than was said.
+- **Sound accents obey the same economy as visual ones.** A segment's `sfx` plays an
+  audio file UNDER the speech at a source-time (mixed like a bleep tone, projected
+  under `speed`) — that's how a whoosh lands ON a dip join, a thud UNDER a punch
+  beat, a zap with a chroma pop. Pair transition→sound in the PACK; the renderer
+  never couples them for you. Keep files peak-normalised and gain ≤ 1, one accent
+  per moment: if two sounds would land within ~3s, the more important one plays and
+  the other is cut. Silence is the default state — **if you consciously hear the
+  palette, it's too loud.**
 - **`reason` every segment** — say what you kept and what you cut before it.
 - **Quality is a setup problem, not an edit problem.** Bad mic / low-res screen /
   busy wallpaper get fixed at the recording side (good mic, 1080p screen, clean
@@ -185,6 +221,16 @@ when teed up), signed asides, time-skips (FADEOUT → "43 hours later"), product
 labels, B-roll it "made", punch-ins. A recurring gag (with a payoff) beats scattered
 one-liners. The renderer itself stays generic — it lays down the clean cut (cuts,
 pip, speed, plain captions); branded/animated overlays are composited downstream.
+
+**Reaction grammar — the double act's missing half.** When a card corrects or ribs
+the presenter, cut to them reacting for 0.5–0.8s where the rolls provide it (a look,
+a pause, an inhale — cam rolls are full of them; source an adjacent take moment if
+the exact beat is mid-word). A correction with no reaction is a footnote; with one
+it's a scene. **The trap (learned on prompt-caching v5): on identical framing a
+short insert reads as a jump-cut stutter, not a reaction.** The insert must LOOK
+different — a visibly changed pose, a lean, or disguise the join with a punch-in.
+If the footage doesn't offer that, the presenter's own next in-point is the
+reaction; skip the insert.
 
 The beats that actually land — the fill-in (supply what they forgot), the wink, the
 cheeky-correction-on-harmless-facts, getting told off and rolling with it — plus the

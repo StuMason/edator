@@ -186,6 +186,20 @@ function planInputs(pack, packDir) {
     }
   });
 
+  // Timed sfx files become plain inputs — one input PER OCCURRENCE, even for the
+  // same file, because an input's stream label can only be consumed once in the
+  // filtergraph (dedupe would need asplit plumbing for a handful of tiny wavs).
+  pack.timeline.forEach((seg, i) => {
+    if (!Array.isArray(seg.sfx) || !seg.sfx.length) return;
+    seg._sfx = seg.sfx.map((s) => {
+      const abs = resolveSource(s.file);
+      if (!existsSync(abs)) die(`Segment ${i}: sfx file not found: ${abs}`);
+      const idx = ffInputs.length;
+      ffInputs.push({ path: abs });
+      return { start: s.start, gain: s.gain ?? 1, _aIdx: idx };
+    });
+  });
+
   // ── zoom:{face:true} — solve the face position, don't guess it ─────────────
   // A static zoom assumes the presenter holds still; they don't. `face: true`
   // shells to the YuNet solver (reframe-focus.py) over the segment's window and
@@ -458,23 +472,41 @@ function buildAudioChain(seg, i, audioKey, idxOf, parts, declick) {
   // projected to the segment's OUTPUT clock (÷ speed), the speech muted across
   // each window, and a 1kHz tone dropped in its place. No bleeps → one clean line.
   const bleeps = Array.isArray(seg.bleeps) ? seg.bleeps : [];
-  const term = bleeps.length ? `[araw${i}]` : `[a${i}]`;
+  const sfx = Array.isArray(seg._sfx) ? seg._sfx : [];
+  const term = bleeps.length || sfx.length ? `[araw${i}]` : `[a${i}]`;
   parts.push(`[${aIdx}:a]atrim=start=${seg.start}:end=${seg.end},asetpts=PTS-STARTPTS${atempo}${fx}${term}`);
-  if (!bleeps.length) return;
+  if (!bleeps.length && !sfx.length) return;
 
-  const windows = bleeps
-    .map((b) => ({ a: +((b.start - seg.start) / speed).toFixed(3), b: +((b.end - seg.start) / speed).toFixed(3) }))
-    .filter((w) => w.b > w.a);
-  // Mute the speech across every window (volume=0 only while `enable` is true).
-  const enable = windows.map((w) => `between(t\\,${w.a}\\,${w.b})`).join("+");
-  parts.push(`${term}volume=0:enable=${enable}[amute${i}]`);
-  // One 1kHz tone per window, delayed to land exactly over the muted word.
-  const tones = windows.map((w, k) => {
-    const dur = (w.b - w.a).toFixed(3), off = Math.round(w.a * 1000);
-    parts.push(`sine=frequency=1000:sample_rate=48000:duration=${dur},adelay=${off}|${off},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,volume=0.5[bz${i}_${k}]`);
-    return `[bz${i}_${k}]`;
-  });
-  parts.push(`[amute${i}]${tones.join("")}amix=inputs=${1 + tones.length}:duration=first:normalize=0[a${i}]`);
+  let cur = term;
+  if (bleeps.length) {
+    const bleepOut = sfx.length ? `[ablp${i}]` : `[a${i}]`;
+    const windows = bleeps
+      .map((b) => ({ a: +((b.start - seg.start) / speed).toFixed(3), b: +((b.end - seg.start) / speed).toFixed(3) }))
+      .filter((w) => w.b > w.a);
+    // Mute the speech across every window (volume=0 only while `enable` is true).
+    const enable = windows.map((w) => `between(t\\,${w.a}\\,${w.b})`).join("+");
+    parts.push(`${cur}volume=0:enable=${enable}[amute${i}]`);
+    // One 1kHz tone per window, delayed to land exactly over the muted word.
+    const tones = windows.map((w, k) => {
+      const dur = (w.b - w.a).toFixed(3), off = Math.round(w.a * 1000);
+      parts.push(`sine=frequency=1000:sample_rate=48000:duration=${dur},adelay=${off}|${off},aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,volume=0.5[bz${i}_${k}]`);
+      return `[bz${i}_${k}]`;
+    });
+    parts.push(`[amute${i}]${tones.join("")}amix=inputs=${1 + tones.length}:duration=first:normalize=0${bleepOut}`);
+    cur = bleepOut;
+  }
+
+  // Timed sfx: each file adelay'd to its (speed-projected) offset and mixed UNDER
+  // the speech — the same machinery as the bleep tones, but sourced from a file
+  // input. duration=first truncates a tail that runs past the segment boundary.
+  if (sfx.length) {
+    const pads = sfx.map((s, k) => {
+      const off = Math.round(Math.max(0, (s.start - seg.start) / speed) * 1000);
+      parts.push(`[${s._aIdx}:a]aformat=sample_fmts=fltp:channel_layouts=stereo:sample_rates=48000,volume=${s.gain},adelay=${off}|${off}[sx${i}_${k}]`);
+      return `[sx${i}_${k}]`;
+    });
+    parts.push(`${cur}${pads.join("")}amix=inputs=${1 + sfx.length}:duration=first:normalize=0[a${i}]`);
+  }
 }
 
 // Optional music tail. Bookend = intro + outro only (faded, louder); bed =
