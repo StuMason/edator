@@ -121,6 +121,41 @@ Point EdAtor at a recording and tell it the vibe:
 EdAtor will transcribe it, read it editorially (and read your codebase if it's a
 technical video), write an edit pack, and render the result to `./out`.
 
+## Sixty-second quickstart — one file, no plugin
+
+Already have a recording? You don't need OBS, the plugin, or a two-roll setup —
+any single mp4 works:
+
+```bash
+git clone https://github.com/StuMason/edator && cd edator
+export ASSEMBLYAI_API_KEY=...   # transcription only; the video never leaves your machine
+node skills/edator/scripts/transcribe.js ~/talk.mp4 --out talk.transcript.json
+```
+
+Read the transcript (or have Claude read it), pick your in/out points, and write
+the smallest possible pack:
+
+```json
+{
+  "version": "1.1",
+  "sources": { "screen": { "file": "/home/you/talk.mp4", "fps": 30 } },
+  "audio": "screen",
+  "output": { "filename": "talk-cut.mp4", "width": 1920, "height": 1080, "fps": 30 },
+  "timeline": [
+    { "source": "screen", "start": 3.2,  "end": 41.0,  "reason": "intro — first stumble trimmed" },
+    { "source": "screen", "start": 55.4, "end": 120.8, "reason": "the demo" }
+  ]
+}
+```
+
+```bash
+node skills/edator/scripts/validate.js mypack.json   # check the contract
+node skills/edator/scripts/render.js mypack.json     # → ./out/talk-cut.mp4
+```
+
+That's the whole loop. Everything else in the pack — zooms, captions, speed
+ramps, PiP, bleeps — is optional vocabulary on top of `start`/`end`/`reason`.
+
 ## How it works
 
 EdAtor owns the story — what to keep, what to cut, where to switch rolls, what to
@@ -273,6 +308,9 @@ because you tell it what's good.
 - **Fonts** (only needed if a pack has captions): a bold sans is auto-detected
   per OS — Arial on macOS, DejaVu/Liberation on Linux, Arial on Windows. Override
   with `EDATOR_FONT` (path to a `.ttf`/`.otf`). A pack with no captions needs no font.
+- **Python 3 + OpenCV** (only for face-tracked features — face-solved zooms and
+  9:16 reframes): `pip install opencv-python-headless numpy`. The face-detection
+  model (YuNet) is bundled in the repo. Everything else is pure Node + FFmpeg.
 
 ## What's in this repo
 
