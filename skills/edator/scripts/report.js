@@ -49,7 +49,10 @@ function analyse(pack) {
   const total = durations.reduce((a, b) => a + b, 0);
 
   // A "static talking-head" segment: a moving roll with no pip, zoom, or captions.
-  const isStatic = (s) => !isImage(s.source) && !s.pip && !s.zoom && !(s.captions && s.captions.length);
+  // A graded beat or a rawFilter accent (chroma pop, fade) IS a visual move —
+  // counting it static flagged stretches that actually contain the punchline.
+  const isStatic = (s) => !isImage(s.source) && !s.pip && !s.zoom && !s.look && !s.rawFilter
+    && !(s.captions && s.captions.length);
   const thTime = segs.filter(isStatic).reduce((a, s) => a + dur(s), 0);
 
   // longest consecutive static stretch (seconds)
@@ -67,9 +70,7 @@ function analyse(pack) {
     push: segs.filter((s) => s.zoom === "push" || (s.zoom && typeof s.zoom === "object" && (s.zoom.from != null || s.zoom.to != null))).length,
     chapter: segs.filter((s) => s.chapter).length,
     transition: segs.filter((s) => s.transition).length,
-    capEditor: segs.reduce((n, s) => n + (s.captions || []).filter((c) => c.style === "editor").length, 0),
-    capLabel: segs.reduce((n, s) => n + (s.captions || []).filter((c) => c.style === "label").length, 0),
-    capPlain: segs.reduce((n, s) => n + (s.captions || []).filter((c) => !c.style || c.style === "plain").length, 0),
+    capPlain: segs.reduce((n, s) => n + (s.captions || []).length, 0),
     music: out.music ? 1 : 0,
   };
 
@@ -93,13 +94,15 @@ function analyse(pack) {
   const af = out.audioFilter || "";
   const audioBad = /loudnorm|afftdn|anlmdn|equalizer|highpass|lowpass/i.test(af);
   const audioWarm = /alimiter/i.test(af) && !audioBad;
+  // Opt-in high-pass is the one blessed EQ move (typed field, not the WARM string).
+  const highpass = out.highpass === true ? 80 : (typeof out.highpass === "number" ? out.highpass : 0);
 
   // distinct kinds of move actually used (for a variety read)
-  const moveKinds = ["rollSwitch", "pip", "zoom", "push", "image", "speed", "chapter", "transition", "capEditor", "capLabel", "music"]
+  const moveKinds = ["rollSwitch", "pip", "zoom", "push", "image", "speed", "chapter", "transition", "capPlain", "music"]
     .filter((k) => moves[k] > 0).length;
 
   return { total, count: segs.length, durations, median, thTime, thPct: total ? thTime / total : 0,
-    longestStatic, moves, moveKinds, draggers, churn, audioWarm, audioBad, audioFilter: af,
+    longestStatic, moves, moveKinds, draggers, churn, audioWarm, audioBad, audioFilter: af, highpass,
     rollBalance, multiRoll, topRoll };
 }
 
@@ -124,7 +127,7 @@ function scorecard(pack, m, validation) {
   if (m.longestStatic > 15) vFlags.push(`${fmt(m.longestStatic)}s static stretch`);
   const mv = m.moves;
   L.push(`VARIETY      talking-head ${Math.round(m.thPct * 100)}% · ${m.moveKinds} move-kinds · ` +
-    `roll×${mv.rollSwitch} pip×${mv.pip} zoom×${mv.zoom} img×${mv.image} cap(ed${mv.capEditor}/lab${mv.capLabel}/pl${mv.capPlain})` +
+    `roll×${mv.rollSwitch} pip×${mv.pip} zoom×${mv.zoom} img×${mv.image} cap×${mv.capPlain}` +
     (mv.speed ? ` speed×${mv.speed}` : "") + (mv.transition ? ` trans×${mv.transition}` : "") + (mv.music ? " music" : ""));
   if (vFlags.length) L.push(`             ⚠ ${vFlags.join(" · ")}`);
 
@@ -140,7 +143,7 @@ function scorecard(pack, m, validation) {
   if (validation.errors.length) cFlags.push(`validation: ${validation.errors.length} error(s)`);
   if (m.audioBad) cFlags.push("audio: over-processed (loudnorm/EQ/denoise — not WARM)");
   L.push(`CORRECTNESS  validation ${validation.errors.length ? "✗ FAIL" : "✓ pass"} · ` +
-    `audio ${m.audioWarm ? "WARM ✓" : (m.audioFilter ? "⚠ check" : "none")} · ` +
+    `audio ${m.audioWarm ? "WARM ✓" : (m.audioFilter ? "⚠ check" : "none")}${m.highpass ? ` +HPF ${m.highpass}Hz` : ""} · ` +
     `captions in-bounds ${validation.errors.some((e) => e.includes("captions")) ? "✗" : "✓"}`);
   if (cFlags.length) for (const f of cFlags) L.push(`             ⚠ ${f}`);
 
@@ -149,7 +152,6 @@ function scorecard(pack, m, validation) {
   if (mv.pip) ambitious.push(`${mv.pip} PiP`);
   if (mv.zoom - mv.push > 0) ambitious.push(`${mv.zoom - mv.push} punch-in`);   // static crops
   if (mv.push) ambitious.push(`${mv.push} push`);
-  if (mv.capEditor) ambitious.push(`${mv.capEditor} EdAtor aside`);
   if (mv.image) ambitious.push(`${mv.image} B-roll card`);
   if (mv.speed) ambitious.push(`${mv.speed} speed-ramp`);
   if (mv.chapter) ambitious.push(`${mv.chapter} chapters`);
@@ -163,18 +165,26 @@ function scorecard(pack, m, validation) {
 // ---- contact sheet (needs the rendered mp4) -------------------------------
 function buildContactSheet(pack, m, mp4, sheetPath, cols) {
   if (!existsSync(mp4)) die(`--contact file not found: ${mp4}`);
-  // output-time midpoints of each segment
+  // Sample points per segment: one midpoint frame for short beats, THREE
+  // (25/50/75%) for anything over 8s — a single frame of a long segment can
+  // catch a lean/blink and send you chasing a framing bug that isn't there.
   let acc = 0;
-  const mids = m.durations.map((d) => { const mid = acc + d / 2; acc += d; return mid; });
-  const work = mkdtempSync(join(tmpdir(), "edator-sheet-"));
+  const samples = [];
   pack.timeline.forEach((s, i) => {
+    const d = m.durations[i];
+    const at = d > 8 ? [0.25, 0.5, 0.75] : [0.5];
+    at.forEach((f, k) => samples.push({ t: acc + d * f, label: `${i}${at.length > 1 ? "abc"[k] : ""}:${s.source}` }));
+    acc += d;
+  });
+  const work = mkdtempSync(join(tmpdir(), "edator-sheet-"));
+  samples.forEach((s, i) => {
     const thumb = join(work, `t${String(i).padStart(3, "0")}.png`);
-    const label = `${i}:${s.source}`.replace(/:/g, "\\:");
+    const label = s.label.replace(/:/g, "\\:");
     const vf = `scale=320:-2,drawbox=x=0:y=0:w=iw:h=22:color=black@0.6:t=fill,` +
       `drawtext=text='${label}':x=5:y=3:fontsize=15:fontcolor=white`;
-    spawnSync("ffmpeg", ["-v", "error", "-ss", String(mids[i].toFixed(2)), "-i", mp4, "-frames:v", "1", "-vf", vf, "-y", thumb]);
+    spawnSync("ffmpeg", ["-v", "error", "-ss", String(s.t.toFixed(2)), "-i", mp4, "-frames:v", "1", "-vf", vf, "-y", thumb]);
   });
-  const n = pack.timeline.length;
+  const n = samples.length;
   const c = cols || Math.ceil(Math.sqrt(n));
   const rows = Math.ceil(n / c);
   const r = spawnSync("ffmpeg", ["-v", "error", "-framerate", "1", "-i", join(work, "t%03d.png"),

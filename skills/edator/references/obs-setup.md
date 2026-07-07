@@ -57,7 +57,7 @@ System Settings → Privacy & Security.
 - Sample Rate = **48 kHz**, Channels = Stereo
 
 **Output** → switch *Output Mode* to **Advanced** → **Recording** tab:
-- Recording Path = `~/Code/tools/edator/recordings`
+- Recording Path = `~/recordings` (any folder you like)
 - Recording Format = **`hybrid MP4`** (or `fragmented MP4`). NEVER plain `mp4` —
   it corrupts the whole file if OBS crashes mid-record. (Or record `mkv` and
   File → Remux Recordings → mp4 afterwards.)
@@ -88,7 +88,7 @@ Add to a single scene:
 
 Right-click the **camera** source → **Filters** → **+** → **Source Record**:
 
-- **Path:** `~/Code/tools/edator/recordings`
+- **Path:** `~/recordings` (any folder you like)
 - **Filename Formatting:** something like `camera-%CCYY-%MM-%DD-%hh-%mm-%ss`
 - **Record Mode:** **`Recording`** ← critical. This ties the camera file to the
   main Record button, so both rolls start and stop on the same frame = synced.
@@ -121,7 +121,7 @@ Close the filter dialog. Done — one Record button now writes both files.
 Confirm both rolls are clean and the same length:
 
 ```bash
-cd ~/Code/tools/edator/recordings
+cd ~/recordings   # wherever you set the Recording Path
 for f in screen-*.mp4 camera-*.mp4; do
   echo "$f:"; ffprobe -v error -show_entries format=duration:stream=codec_type,codec_name \
     -of default=nw=1 "$f"; echo
