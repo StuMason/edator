@@ -23,6 +23,11 @@ jobs:
       - name: Install deps
         run: npm install
 
+      # test-matrix.mjs renders every feature x source-kind combination on tiny
+      # lavfi-generated footage, so it needs real ffmpeg/ffprobe binaries.
+      - name: Install ffmpeg
+        run: sudo apt-get update -q && sudo apt-get install -y --no-install-recommends ffmpeg
+
       # Catch syntax errors before running anything.
       - name: Syntax check
         run: |

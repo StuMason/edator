@@ -23,12 +23,11 @@ const fixturesDir = resolve(__dirname, "fixtures");
 const packsDir = join(fixturesDir, "packs");
 const goldenDir = resolve(__dirname, "golden");
 
-// Pin fonts to committed fixture files so captions resolve identically on every
-// OS. Both live under fixturesDir, so the normaliser collapses them to <FIX>.
+// Pin the caption font to a committed fixture file so captions resolve identically
+// on every OS. It lives under fixturesDir, so the normaliser collapses it to <FIX>.
 const env = {
   ...process.env,
   EDATOR_FONT: join(fixturesDir, "font.ttf"),
-  EDATOR_MONO: join(fixturesDir, "mono.ttf"),
 };
 
 function normalise(graph) {

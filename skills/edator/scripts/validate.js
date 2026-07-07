@@ -34,7 +34,7 @@ const SCHEMA_PATH = resolve(__dirname, "..", "references", "edit-pack.schema.jso
 const IMAGE_EXEMPT = 1 / 1000; // treat sub-millisecond as a likely mistake
 
 // ---- semantic checks (dependency-free, always on) ------------------------
-function semanticErrors(pack) {
+function semanticErrors(pack, packDir, w = []) {
   const e = [];
   if (!pack || typeof pack !== "object") return ["Pack is not an object."];
   if (pack.version !== "1.0" && pack.version !== "1.1") e.push(`version: "${pack.version}" is not supported (expected "1.0" or "1.1").`);
@@ -72,6 +72,22 @@ function semanticErrors(pack) {
     // image segment needs sound from somewhere (the still has none)
     if (isImage(seg.source) && seg.audio == null && pack.audio == null) {
       e.push(`${at}: source "${seg.source}" is an image (no audio) — set this segment's "audio" or the global "audio" bed.`);
+    }
+
+    // sfx fire inside the segment's source-time window; files must exist
+    if (Array.isArray(seg.sfx)) {
+      seg.sfx.forEach((s, j) => {
+        const sat = `${at}.sfx[${j}]`;
+        if (typeof s.file !== "string" || typeof s.start !== "number") { e.push(`${sat}: needs "file" + "start".`); return; }
+        if (s.start < seg.start - 1e-6 || s.start > seg.end + 1e-6) {
+          e.push(`${sat}: start ${s.start} falls outside the segment window [${seg.start},${seg.end}] — sfx are timed in source-time.`);
+        }
+        if (packDir) {
+          const abs = isAbsolute(s.file) ? s.file : resolve(packDir, s.file);
+          if (!existsSync(abs)) e.push(`${sat}: file not found: ${abs}`);
+        }
+        if (s.gain != null && s.gain > 1) w.push(`${sat}: gain ${s.gain} > 1 amplifies — palette files are peak-normalised, an accent you consciously hear is too loud.`);
+      });
     }
 
     // captions must fall inside the segment's source-time window
@@ -112,12 +128,14 @@ async function structuralErrors(pack) {
   }
 }
 
-/** Validate a parsed pack. Returns { errors: string[], ajvRan: boolean }. */
-export async function validatePack(pack) {
-  const errors = semanticErrors(pack);
+/** Validate a parsed pack. Returns { errors, warnings: string[], ajvRan: boolean }.
+ *  Pass packDir to also check pack-relative file references (sfx). */
+export async function validatePack(pack, packDir) {
+  const warnings = [];
+  const errors = semanticErrors(pack, packDir, warnings);
   const { ran, errors: structural } = await structuralErrors(pack);
   // Structural typo/type errors are valuable; list them after the semantic ones.
-  return { errors: [...errors, ...structural], ajvRan: ran };
+  return { errors: [...errors, ...structural], warnings, ajvRan: ran };
 }
 
 // ---- CLI -----------------------------------------------------------------
@@ -131,8 +149,9 @@ if (isMain) {
   try { pack = JSON.parse(readFileSync(path, "utf8")); }
   catch (err) { console.error(`✗ Not valid JSON: ${err.message}`); process.exit(1); }
 
-  const { errors, ajvRan } = await validatePack(pack);
+  const { errors, warnings, ajvRan } = await validatePack(pack, dirname(path));
   if (!ajvRan) console.error("ℹ strict schema checks skipped — run `npm install` in scripts/ to enable ajv (typo/type catching).");
+  for (const warning of warnings) console.error(`  ⚠ ${warning}`);
   if (errors.length) {
     console.error(`✗ ${path} is invalid:`);
     for (const e of errors) console.error(`  • ${e}`);

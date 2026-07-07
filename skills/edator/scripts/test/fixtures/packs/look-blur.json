@@ -1,0 +1,11 @@
+{
+  "version": "1.1",
+  "sources": { "cam": { "file": "../media/cam.mp4", "fps": 30 }, "screen": { "file": "../media/screen.mp4", "fps": 30 } },
+  "audio": "screen",
+  "output": { "filename": "look-blur.mp4", "width": 1280, "height": 720, "fps": 30, "audioFilter": "volume=7dB,alimiter=limit=0.95" },
+  "timeline": [
+    { "source": "cam", "start": 0.0, "end": 6.0, "zoom": "push", "motionBlur": true, "look": "cold-open" },
+    { "source": "screen", "start": 6.0, "end": 12.0 },
+    { "source": "cam", "start": 12.0, "end": 16.0, "look": "punch" }
+  ]
+}

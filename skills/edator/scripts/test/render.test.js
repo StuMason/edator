@@ -15,7 +15,7 @@ function packFile(opts = {}) {
   const dir = mkdtempSync(join(tmpdir(), "edator-fonttest-"));
   const p = join(dir, "pack.json");
   const seg = { source: "m", start: 0, end: 5 };
-  if (opts.captioned) seg.captions = [{ text: "hi", style: "label", start: 1, end: 3 }];
+  if (opts.captioned) seg.captions = [{ text: "hi", style: "plain", start: 1, end: 3 }];
   writeFileSync(p, JSON.stringify({
     version: "1.1",
     sources: { m: { file: render } },
@@ -33,23 +33,23 @@ test("a captioned pack resolves some font on the host", () => {
   assert.match(r.stdout, /fontfile=/, "the graph should reference a resolved font");
 });
 
-test("EDATOR_FONT / EDATOR_MONO overrides are honoured", () => {
+test("EDATOR_FONT override is honoured", () => {
   const font = join(mkdtempSync(join(tmpdir(), "edator-f-")), "fake.ttf");
   writeFileSync(font, "x");
-  const r = run(packFile({ captioned: true }), { EDATOR_MONO: font });
+  const r = run(packFile({ captioned: true }), { EDATOR_FONT: font });
   assert.equal(r.status, 0, r.stderr);
   assert.ok(r.stdout.includes(font), "the override font path should appear in the graph");
 });
 
 test("a missing font override fails clearly when a caption needs it", () => {
-  const r = run(packFile({ captioned: true }), { EDATOR_MONO: "/no/such/font.ttf" });
+  const r = run(packFile({ captioned: true }), { EDATOR_FONT: "/no/such/font.ttf" });
   assert.notEqual(r.status, 0, "should exit non-zero");
-  assert.match(r.stderr, /doesn't exist|No monospace/, "should name the font problem");
+  assert.match(r.stderr, /doesn't exist|No bold sans/, "should name the font problem");
 });
 
 test("a pack with no captions renders even when no font is available", () => {
-  // bad overrides for both — but the pack draws nothing, so fonts are never needed
-  const r = run(packFile({ captioned: false }), { EDATOR_FONT: "/no/x.ttf", EDATOR_MONO: "/no/y.ttf" });
+  // bad override — but the pack draws nothing, so a font is never needed
+  const r = run(packFile({ captioned: false }), { EDATOR_FONT: "/no/x.ttf" });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /concat=n=/, "should still build the graph");
 });

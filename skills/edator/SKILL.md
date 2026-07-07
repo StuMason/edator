@@ -39,6 +39,9 @@ write a pack — every field there is executed; nothing is reserved.
 1. **Transcribe.** `node scripts/transcribe.js <recording.mp4>` → word-level JSON
    (AssemblyAI Universal-3 Pro, disfluencies on — every "um"/false-start
    timestamped). Only the audio leaves the machine. Needs `ASSEMBLYAI_API_KEY`.
+   Then `node scripts/phrase.js <transcript> "a line"` returns just that line's
+   in/out, and `phrase.js <transcript> --list` a sentence-level overview — read
+   those, not the whole word table.
 2. **Find real cut points.** `node scripts/envelope.js <media> --from A --to B`
    gives RMS-dBFS speech onsets — the "waveform" you cut *to*. Transcript word
    times are approximate; trust the envelope for sharp in/outs and trimming breaths.
@@ -49,7 +52,7 @@ write a pack — every field there is executed; nothing is reserved.
    the facts right. Generated B-roll must be accurate — and where the narration and
    the code disagree, the narration wins on screen.
 5. **Generate assets if they earn their place.** Diagrams / cards / idents authored
-   as on-brand HTML → screenshot → PNG (stills) or short MP4. See `references/style.md`.
+   as HTML → screenshot → PNG (stills) or short MP4, in whatever brand the presenter uses.
 6. **Write the pack.** Build `timeline` against the schema. Decorate the cut spine
    with roll-switches, PiP, zoom punch-ins, B-roll, captions, EdAtor beats.
 7. **Validate, then render.** `node scripts/validate.js <pack.json>` checks the pack
@@ -71,10 +74,17 @@ write a pack — every field there is executed; nothing is reserved.
    segment that ends a beat too late leaves a false start ("at the moment I'm
    using— at the moment it's using…"), or a cut lands mid-word. The output
    transcript is the ground truth of how the cut actually *sounds*. It's a paid
-   re-transcribe, so it's optional — but it's the cheapest way to catch the audio
-   jank the contact sheet can't show. (Cheaper proxy: the cut's audio is exactly
-   the kept `[start,end)` spans of the source transcript — scan those for repeats
-   before paying.)
+   re-transcribe but it costs pennies against a shipped flaw — treat it as a
+   DEFAULT step, not an optional one: a cut once shipped opening on "9% of my…"
+   (the hook's "six-" clipped) and the read-back would have caught it in one pass.
+   Two rules for reading it:
+   - **In-points:** ASR word-start times LAG the acoustic onset (worst on
+     numbers/emphasis). The envelope's "pre-word energy" is usually the word, not
+     a breath — pad segment starts ~0.2s before the envelope onset.
+   - **Bleeps:** the ASR will happily transcribe a fully-bleeped swear from
+     context — a censored word appearing in the output transcript is NOT a leak.
+     Verify bleeps with a spectrogram (`ffmpeg … showspectrumpic`): a clean bleep
+     is a bright 1 kHz line (+ limiter-harmonic ladder) over a BLACK background.
 
 ## Two-roll recording (optional but great)
 
@@ -123,10 +133,26 @@ red flag, not a clean cut.
   hook line, played straight — *before* the ident sting drops. Grabs attention with a
   question, then the brand hits, then you're into it. The hook is usually the
   presenter's natural strong opener; let it open cold, then start the body after it.
-- **Cut tighter than feels comfortable.** Less talking-head, shorter overall. Long
-  and static is the failure mode. Drop a beat that doesn't earn its place.
+- **Cut tighter than feels comfortable — except the joke.** Less talking-head, shorter
+  overall. Long and static is the failure mode. Drop a beat that doesn't earn its place.
+  **Comedy air is the one exception:** tightness is for information; jokes need air. A
+  punchline — the presenter's or a card's — earns a **0.4–0.6s held beat** before the
+  next cut (extend the segment end into the real pause that follows the line; the pause
+  is almost always in the raw). A quip card must fully land in silence-from-the-presenter
+  — fire it in a pause, or make one. If killing dead air kills a laugh, the laugh wins.
 - **Visual variety by default** — rotate the moves; don't repeat the same two
   effects. A roll-switch, a punch-in, a card, an aside, a label — keep it moving.
+- **Escalate the devices — never spend the loudest one early.** The dressing has acts:
+  open sparse (corner cards only in act 1) → first full-frame graphic no earlier than
+  ~the 40% mark → the single biggest device (number-hit / takeover) on the thesis beat,
+  around the two-thirds point. Chapter-lowers are exempt (they're wayfinding, not
+  fireworks), and a teach panel is teaching, not spectacle — it may come earlier when
+  the material earns it.
+- **Stakes stay visible.** If the video's argument is a growing number (cost, tokens,
+  time), put the number ON SCREEN growing for the stretch it grows over (the brand
+  kit's ticker chyron) and time its settle to the reveal word — don't ask the viewer to
+  hold the number in their head for four minutes. It's the only persistent overlay;
+  nothing else occupies its corner while it's live.
 - **No nonsense decoration.** Don't staple unrelated subheaders onto cards. If it
   doesn't belong, it doesn't go in.
 - **Cuts declick themselves.** Every join gets an automatic 5ms audio fade — you
@@ -136,9 +162,17 @@ red flag, not a clean cut.
 - **Speed-ramp the dead time.** A long wait (install, build, scaffold) is a
   `speed` segment, not a cut — `"speed": 3.0` keeps continuity where a hard cut
   would feel like a jump. A/V stays locked; caption it so the viewer's in on it.
+- **Face-anchored framing is SOLVED, not guessed.** For a teach-panel beat (face
+  parked on one side, panel on the other) use `zoom: {face: true, scale: 1.6,
+  side: "right"}` — the renderer runs the YuNet face solver over that segment's
+  window at plan time and computes the focus from where the presenter actually
+  sat in THIS take. Hand-tuned x/y numbers drift the moment they lean.
 - **`zoom:"push"` gives a static frame life.** A held still or a long talking-head
   beat earns a slow push (Ken Burns). Don't push everything — it's for the beat
   that wants to breathe, same as a punch-in is for the claim that wants emphasis.
+  The renderer supersamples before zoompan, so the push is smooth, not jittery.
+  Add **`motionBlur: true`** on a *fast* push so it reads cinematic instead of
+  strobing (oversampled + frame-blended; no-op on a static punch-in).
 - **`chapter` the structural beats.** A title on the first segment of each section
   gives YouTube chapters for free. Put one on segment 0 so the first marker is 0:00.
 - **Raw filters are the last resort, and they belong IN the pack.** If the typed
@@ -152,11 +186,29 @@ red flag, not a clean cut.
   drawtext, so it dims your own text). Stylise specific beats — a graded cold open,
   a chromatic pop on a punchline — and leave the core, and every screen-share,
   clean. Never grade under a caption.
+- **Grade with a named `look`, not an ad-hoc rawFilter.** `look:"cold-open"` (the
+  house graded open), `"punch"` (richer, for a punchline), `"noir"`, `"warm"` are
+  locked, reproducible grades — same pack → same look every video. Reach for the
+  preset first; `rawFilter` is for the one-off the palette can't say. A `look`
+  layers *under* a `rawFilter` so you can still add a glitch pop on top.
 - **A constant rawFilter spans the whole segment — so for a PUNCH, split.** A glitch
   on a 6-second segment runs for 6 seconds and reads as "something broke", not a
   joke. Want a 0.5s chromatic/glitch hit on one word? Cut a ~0.5s micro-segment at
   that word, put the rawFilter only on it, clean either side. The effect is a
   punctuation mark, not a duration.
+- **Bleep, don't blast.** `bleeps` censors a word (speech muted + 1kHz tone) —
+  source-timed like a caption, pad ~0.02s each side to cover the consonants. The
+  tone sits *just below* speech level: a casual "shit" gets a casual bleep,
+  not an air-raid siren. Keep windows tight to the word — a long bleep reads as a
+  bigger swear than was said.
+- **Sound accents obey the same economy as visual ones.** A segment's `sfx` plays an
+  audio file UNDER the speech at a source-time (mixed like a bleep tone, projected
+  under `speed`) — that's how a whoosh lands ON a dip join, a thud UNDER a punch
+  beat, a zap with a chroma pop. Pair transition→sound in the PACK; the renderer
+  never couples them for you. Keep files peak-normalised and gain ≤ 1, one accent
+  per moment: if two sounds would land within ~3s, the more important one plays and
+  the other is cut. Silence is the default state — **if you consciously hear the
+  palette, it's too loud.**
 - **`reason` every segment** — say what you kept and what you cut before it.
 - **Quality is a setup problem, not an edit problem.** Bad mic / low-res screen /
   busy wallpaper get fixed at the recording side (good mic, 1080p screen, clean
@@ -165,9 +217,20 @@ red flag, not a clean cut.
 ## EdAtor on screen (the bit)
 
 A co-presenter, not an effects menu. Range: full-screen takeover ("HELLO EVERYONE"
-when teed up), signed chat-bubble asides (`style:"editor"`), time-skips
-(FADEOUT → "43 hours later"), production labels (`style:"label"`), B-roll it "made",
-punch-ins. A recurring gag (with a payoff) beats scattered one-liners.
+when teed up), signed asides, time-skips (FADEOUT → "43 hours later"), production
+labels, B-roll it "made", punch-ins. A recurring gag (with a payoff) beats scattered
+one-liners. The renderer itself stays generic — it lays down the clean cut (cuts,
+pip, speed, plain captions); branded/animated overlays are composited downstream.
+
+**Reaction grammar — the double act's missing half.** When a card corrects or ribs
+the presenter, cut to them reacting for 0.5–0.8s where the rolls provide it (a look,
+a pause, an inhale — cam rolls are full of them; source an adjacent take moment if
+the exact beat is mid-word). A correction with no reaction is a footnote; with one
+it's a scene. **The trap (learned on prompt-caching v5): on identical framing a
+short insert reads as a jump-cut stutter, not a reaction.** The insert must LOOK
+different — a visibly changed pose, a lean, or disguise the join with a punch-in.
+If the footage doesn't offer that, the presenter's own next in-point is the
+reaction; skip the insert.
 
 The beats that actually land — the fill-in (supply what they forgot), the wink, the
 cheeky-correction-on-harmless-facts, getting told off and rolling with it — plus the
@@ -195,6 +258,32 @@ pumpy. `afftdn` denoise = robotic and watery. EQ stacks made it worse. Policy:
 minimal or no filter — at most a gentle lift + transparent limiter
 (`output.audioFilter: "volume=7dB,alimiter=limit=0.95"`). Never denoise/EQ/loudnorm
 a voice in post; fix the room at the recording side. **Warm beats loud.**
+
+Two opt-in exceptions that are NOT loudnorm/denoise: `output.highpass: true` (an 80 Hz
+high-pass that only removes desk thump/rumble below the voice — A/B it per video),
+and `output.music.duck: true` (sidechain-duck a music bed under speech). Both off by
+default. To land a consistent level, measure don't guess: `loudness.js <cut>` reports
+integrated LUFS + true-peak vs the -14 target — raise the WARM `volume` into the
+limiter toward it; the delivery step de-clips a hot master automatically.
+
+## Finishing & delivery (after the cut is proven clean)
+
+The cut is the engine's job; **finishing + delivery** is a separate stage with its
+own tools (run by `bin/edator.mjs` `deliver`, or by hand):
+
+- **`captions.js <pack> <transcript>`** — SRT + VTT sidecars, projected from the
+  source transcript through the timeline. Long-form ships the sidecar; we do NOT
+  bake captions into the master (only shorts burn them in).
+- **`loudness.js <cut>`** — measure LUFS/true-peak; `--deliver` lands a peak-safe
+  master with one static gain (no compression).
+- **`qc.js <master>`** — delivery QC sheet: LUFS, true-peak, bt709 colour tags,
+  A/V-sync. Distinct from `report.js` (which scores the *cut*).
+- **`brand/overlay-kit/thumbs.js`** — three Signal thumbnail options.
+
+The renderer also now tags **bt709 colour** (primaries/transfer/matrix + limited
+range) on every encode, so graded blacks don't crush/wash on the viewer's player.
+J/L cuts (`audioLead`/`audioTrail`) exist for sources where audio should lead/trail
+its picture — not useful on a continuous-bed talking-head, but there for dialogue.
 
 ## Requirements
 
