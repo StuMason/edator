@@ -125,9 +125,12 @@ function drawtext(cap, segStart, Wpx, Hpx, speed = 1) {
 // Load & validate the pack
 // ---------------------------------------------------------------------------
 function loadPack(packPath) {
-  if (!existsSync(packPath)) die(`Edit pack not found: ${packPath}`);
+  // Read fd 0 directly for stdin: re-opening /dev/stdin fails with ENXIO when
+  // the pipe's write end has already closed (spawnSync with `input`).
+  const fromStdin = packPath === "-" || packPath === "/dev/stdin";
+  if (!fromStdin && !existsSync(packPath)) die(`Edit pack not found: ${packPath}`);
   let pack;
-  try { pack = JSON.parse(readFileSync(packPath, "utf8")); }
+  try { pack = JSON.parse(readFileSync(fromStdin ? 0 : packPath, "utf8")); }
   catch (e) { die(`Edit pack is not valid JSON: ${e.message}`); }
 
   if (pack.version !== "1.0" && pack.version !== "1.1") die(`Unsupported version: ${pack.version} (expected "1.0" or "1.1").`);
